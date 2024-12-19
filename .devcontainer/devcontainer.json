@@ -1,0 +1,65 @@
+{
+    "name": "Python 3 - NaturalSQL",
+    "image": "mcr.microsoft.com/devcontainers/python:1-3.11-bullseye", 
+  
+    // Optional: You can define a custom Dockerfile if you need more control
+    // "build": {
+    //   "dockerfile": "./Dockerfile"
+    // },
+  
+    "customizations": {
+      "codespaces": {
+        "openFiles": [
+          "README.md", 
+          "app/naturalSQL.py"
+        ]
+      },
+      "vscode": {
+        "settings": {
+          // Optional VSCode settings can go here, e.g., Python formatting settings
+          "python.formatting.provider": "black",
+          "python.linting.enabled": true,
+          "python.linting.pylintEnabled": true
+        },
+        "extensions": [
+          "ms-python.python", 
+          "ms-python.vscode-pylance", 
+          "njpwerner.autodocstring",  // Auto-generates docstrings in Python code
+          "esbenp.prettier-vscode"    // Code formatter for HTML, CSS, JS, etc.
+        ]
+      }
+    },
+  
+    // Commands to install dependencies and setup the environment
+    "updateContentCommand": [
+      "echo '🔄 Updating system packages...' && sudo apt update && sudo apt upgrade -y",
+      "echo '📦 Installing system dependencies from packages.txt...' && [ -f packages.txt ] && sudo xargs apt install -y < packages.txt",
+      "echo '🔧 Installing Python dependencies from requirements.txt...' && [ -f requirements.txt ] && pip3 install --user -r requirements.txt",
+      "echo '🔧 Installing Streamlit...' && pip3 install --user streamlit",
+      "echo '✅ Setup Complete. All dependencies installed!'"
+    ],
+  
+    "postAttachCommand": "streamlit run app/naturalSQL.py --server.enableCORS false --server.enableXsrfProtection false",
+  
+    "portsAttributes": {
+      "8501": {
+        "label": "Streamlit Application",
+        "onAutoForward": "openPreview"
+      }
+    },
+    "forwardPorts": [
+      8501
+    ],
+  
+    // Optional: Define environment variables for your container
+    "containerEnv": {
+      "PYTHONPATH": "/workspace/src",
+      "DEV_ENV": "development"
+    },
+  
+    // Optional: Set up volume mounting for persistent data
+    "mounts": [
+      "source=/path/to/local/folder,target=/workspace/data,type=bind"
+    ]
+  }
+  
