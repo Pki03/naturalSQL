@@ -36,3 +36,26 @@ def create_connection(
     except Exception as e:
         logger.exception(f"unexpected error {e}")
     return None
+
+def query_database(
+        query:str,
+        db_name:str,
+        db_type:str,
+        host:Optional[str]=None,
+        user:Optional[str]=None,
+        password:Optional[str]=None
+)->pd.DataFrame:
+    conn = create_connection(query,db_name,db_type,host,user,password)
+    if conn is None:
+        logger.error("Database connection failure and returning empty dataframe")
+        return pd.DataFrame()
+    try:
+        df=pd.read_sql_query(query,conn)
+        logger.info("query executed successfully")
+        return df
+    except Exception as e:
+        logger.error(f"Error executing {e}")
+        return pd.DataFrame()
+    finally:
+        conn.close()
+        logger.info("Connection closed")
