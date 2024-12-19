@@ -1,0 +1,12 @@
+streamlit
+streamlit-nested-layout
+streamlit-extras
+pandas
+altair
+openpyxl
+psycopg2-binary
+sqlalchemy
+python-dotenv
+google-generativeai
+flask
+

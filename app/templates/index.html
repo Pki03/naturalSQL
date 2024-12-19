@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NLP to SQL Converter</title>
+</head>
+<body>
+    <h1>NLP to SQL Converter</h1>
+    <form method="post">
+        <label for="user_query">Enter your query in natural language:</label><br>
+        <input type="text" id="user_query" name="user_query" required><br><br>
+        <input type="submit" value="Generate SQL">
+    </form>
+    
+    {% if sql_query %}
+    <h2>Generated SQL Query:</h2>
+    <p>{{ sql_query }}</p>
+    {% endif %}
+    
+    {% if result %}
+    <h2>Query Result:</h2>
+    <pre>{{ result }}</pre>
+    {% endif %}
+</body>
+</html>
