@@ -440,6 +440,53 @@ def create_chart(df:pd.DataFrame,chart_type:str,x_col:col,y_col:str)->Optional[a
         st.error(f"Error generating the chart: {e}")
         logger.error(f"Error generating chart: {e}")
         return None
+    
+def display_summary_statistics(df:pd.DataFrame)->None:
+    """Display summary statistics for the given DataFrame."""
+
+    if df.empty:
+        st.warning("dataframe is empty so not able to display results")
+        return
+    
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    non_numeric_cols = df.select_dtypes(exclude=[np.number]).columns
+
+    tab1, tab2 = st.tabs(["Numeric Summary Statistics", "Categorical Data Insights"])
+
+    if not numeric_cols.empty:
+        with tab1:
+            numeric_stats = df[numeric_cols].describe().T
+            numeric_stats['median'] = df[numeric_cols].median()
+            numeric_stats['mode'] = df[numeric_cols].mode().fillna(0).iloc[0]
+            numeric_stats['iqr'] = numeric_stats['75%'] - numeric_stats['25%']
+            numeric_stats['skew'] = df[numeric_cols].skew()
+            numeric_stats['kurt'] = df[numeric_cols].kurt()
+
+            st.markdown("### Numeric Summary Statistics")
+            st.dataframe(numeric_stats.style.format("{:.2f}").highlight_max(axis=0, color="lightgreen"))
+
+            for col in numeric_cols:
+                st.markdown(f"#### {col}")
+                chart = alt.Chart(df).mark_bar().encode(
+                    alt.X(col, bin=alt.Bin(maxbins=30), title=f"Distribution of {col}"),
+                    y='count()'
+                ).properties(
+                    width='container',
+                    height=200
+                ).interactive()
+                st.altair_chart(chart, use_container_width=True)
+
+    if not non_numeric_cols.empty:
+        with tab2:
+            st.markdown("### Categorical Data Insights")
+            for col in non_numeric_cols:
+                st.markdown(f"**{col} Frequency**")
+                freq_table = df[col].value_counts().reset_index()
+                freq_table.columns = ['Category', 'Count']
+                freq_table['Percentage'] = (freq_table['Count'] / len(df) * 100).round(2)
+                st.table(freq_table.style.format({"Percentage": "{:.2f}%"}))
+
+
 
 
         
