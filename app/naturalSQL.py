@@ -288,6 +288,121 @@ def validate_response_structure(response:dict)->bool:
     except Exception as e:
         logger.exception(f"Unexpected error: {e}")
         return False
+    
+def build_markdown_decision_log(decision_log:Dict)->str:
+    """
+    Builds a markdown formatted decision log that matches the schema structure.
+    Handles all fields defined in the DECISION_LOG_SCHEMA.
+    """
+    markdown_log=[]
+
+    # query input details
+    if query_details := decision_log.get("query_input_details"):
+        markdown_log.extend([
+             "### Query Input Analysis",
+            "\n".join(f"- {detail}" for detail in query_details),
+            ""
+        ])
+
+    #preprocessing steps
+    if preprocessing := decision_log.get("preprocessing_steps"):
+        markdown_log.extend([
+            "### Preprocessing Steps",
+            "\n".join(f"- {step}" for step in preprocessing),
+            ""
+        ])
+
+    # path identification
+    if paths := decision_log.get("path_identification"):
+        markdown_log.extend([
+            "### Path Identification",
+            "\n".join([
+                f"**Path {i+1}** (Score: {path['score']})\n"
+                f"- Description: {path['description']}\n"
+                f"- Tables: {', '.join(path['tables'])}\n"
+                f"- Columns: {', '.join([', '.join(cols) for cols in path['columns']])}"
+                for i, path in enumerate(paths)
+            ]),
+            ""
+        ])
+
+    # ambiguity detection
+    if ambiguities := decision_log.get("ambiguity_detection"):
+        markdown_log.extend([
+            "### Ambiguity Analysis",
+            "\n".join(f"- {ambiguity}" for ambiguity in ambiguities),
+            ""
+        ])
+
+     # resolution criteria
+    if criteria := decision_log.get("resolution_criteria"):
+        markdown_log.extend([
+            "### Resolution Criteria",
+            "\n".join(f"- {criterion}" for criterion in criteria),
+            ""
+        ])
+
+    # chosen path explanation
+    if chosen_path := decision_log.get("chosen_path_explanation"):
+        markdown_log.extend([
+            "### Selected Tables and Columns",
+            "\n".join([
+                f"**{table['table']}**\n"
+                f"- Columns: {', '.join(table['columns'])}\n"
+                f"- Reason: {table['reason']}"
+                for table in chosen_path
+            ]),
+            ""
+        ])
+
+    # generated sql query
+    if sql_query := decision_log.get("generated_sql_query"):
+        markdown_log.extend([
+            "### Generated SQL Query",
+            f"```sql\n{sql_query}\n```",
+            ""
+        ])
+
+    # alternative paths
+    if alternatives := decision_log.get("alternative_paths"):
+        markdown_log.extend([
+            "### Alternative Approaches",
+            "\n".join(f"- {alt}" for alt in alternatives),
+            ""
+        ])
+    
+    # execution feedback
+    if feedback := decision_log.get("execution_feedback"):
+        markdown_log.extend([
+            "### Execution Feedback",
+            "\n".join(f"- {item}" for item in feedback),
+            ""
+        ])
+    
+    # finalis summary
+    if summary := decision_log.get("final_summary"):
+        markdown_log.extend([
+            "### Summary",
+            summary,
+            ""
+        ])
+    
+    # visualisation suggestions
+    if viz_suggestion := decision_log.get("visualization_suggestion"):
+        markdown_log.extend([
+            "### Visualization Recommendation",
+            f"Suggested visualization type: `{viz_suggestion}`",
+            ""
+        ])
+    
+    # Join with proper line breaks and clean up any extra spaces
+    return "\n".join(line.rstrip() for line in markdown_log)
+
+
+        
+
+    
+    
 
 
 
