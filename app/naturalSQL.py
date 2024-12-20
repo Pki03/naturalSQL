@@ -398,6 +398,49 @@ def build_markdown_decision_log(decision_log:Dict)->str:
     # Join with proper line breaks and clean up any extra spaces
     return "\n".join(line.rstrip() for line in markdown_log)
 
+def create_chart(df:pd.DataFrame,chart_type:str,x_col:col,y_col:str)->Optional[alt.Chart]:
+    """Create a chart using Altair library."""
+    base_chart = alt.Chart(df).configure_title(fontSize=18,fontWeight='bold',font='Roboto')
+
+    try:
+        chart_props={
+            "Bar Chart": base_chart.mark_bar(),
+            "Line Chart": base_chart.mark_line(),
+            "Scatter Plot": base_chart.mark_circle(),
+            "Area Chart": base_chart.mark_area(),
+            "Histogram": base_chart.mark_bar()
+        }
+
+        if chart_type == "Histogram":
+            chart = chart_props[chart_type].encode(
+                alt.X(x_col, bin=alt.Bin(maxbins=30), title=x_col),
+                y=alt.Y('count()', title='Count')
+            ).properties(
+                width='container',
+                height=400
+            ).interactive()
+        else:
+            encoding = {
+                "x": alt.X(x_col, title=x_col),
+                "y": alt.Y(y_col, title=y_col)
+            }
+            if chart_type in ["Bar Chart", "Line Chart"]:
+                encoding["color"] = alt.Color(y_col, legend=None)
+            elif chart_type == "Scatter Plot":
+                encoding["tooltip"] = [x_col, y_col]
+
+            chart = chart_props[chart_type].encode(**encoding).properties(
+                width='container',
+                height=400
+            ).interactive()
+
+        return chart
+
+    except Exception as e:
+        st.error(f"Error generating the chart: {e}")
+        logger.error(f"Error generating chart: {e}")
+        return None
+
 
         
 
