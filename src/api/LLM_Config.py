@@ -1,38 +1,57 @@
 import os
-import google.auth
-from google.cloud import aiplatform
 from dotenv import load_dotenv
+import google.generativeai as genai
+import re
 
-# Load the environment variables from the .env file
+# Load environment variables from a .env file
 load_dotenv()
 
-# Fetch the API key and model from the environment
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL")
+# Fetch the Gemini API key and model from environment variables
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-1.5-pro')  # Default to 'gemini-1.5-pro' if not set
 
-# Initialize Google Cloud AI Platform client
-def initialize_client():
-    credentials, project = google.auth.load_credentials_from_file(GEMINI_API_KEY)  # You can directly pass the API key
-    aiplatform.init(credentials=credentials)
+# Raise an error if the API key is not set, as it's required for API interaction
+if not GEMINI_API_KEY:
+    raise ValueError("GEMINI_API_KEY environment variable is not set")
 
-def generate_sql(natural_language_query):
-    # Initialize the client if it is not initialized yet
-    initialize_client()
+# Configure the Generative AI client with the provided API key
+genai.configure(api_key=GEMINI_API_KEY)
 
-    # Define the model and endpoint (adjust if needed)
-    model_endpoint = f"projects/my-nlp-project/locations/us-central1/models/gemini-1.5-flash"
+def get_completion_from_messages(
+    system_message: str,
+    user_message: str,
+    temperature: float = 0.3,
+) -> str:
+    """
+    Generates a completion response from the Generative AI model based on system and user messages.
 
-    
-    # Create a prediction client
-    model = aiplatform.gapic.PredictionServiceClient()
+    Args:
+        system_message (str): The system-provided message for context or instruction.
+        user_message (str): The user's input query.
+        temperature (float): Controls the randomness of the output. Lower values make it more deterministic.
 
-    # Generate the response from Gemini 1.5
-    response = model.predict(
-        endpoint=model_endpoint,
-        instances=[{"content": natural_language_query}]
-    )
+    Returns:
+        str: The model's response or an error message in case of failure.
+    """
+    try:
+        # Combine system and user messages into a single string to provide context to the model
+        combined_message = f"{system_message}\n\nUser Query: {user_message}"
 
-    # Extract the generated SQL query
-    sql_query = response.predictions[0]  # Assuming the response is in this structure
+        # Instantiate the Generative AI model using the specified Gemini model
+        model = genai.GenerativeModel(GEMINI_MODEL)
 
-    return sql_query
+        # Generate content using the combined message with specified temperature
+        response = model.generate_content(
+            contents=combined_message,
+            generation_config={"temperature": temperature}
+        )
+
+        # Extract and clean the generated text from the response
+        text = response.text if isinstance(response.text, str) else str(response.text)
+        clean_text = re.sub(r'```json\n|\n```', '', text)  # Remove unwanted formatting if present
+
+        return clean_text
+    except Exception as e:
+        # Handle errors gracefully and return an error message
+        error_msg = f"Error generating response: {str(e)}"
+        return error_msg
