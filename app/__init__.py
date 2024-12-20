@@ -1,3 +1,3 @@
-from .naturalSQLL import main t
+from .naturalSQL import main t
 
 __all__ = ['main']
