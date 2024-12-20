@@ -211,6 +211,87 @@ DECISION_LOG_SCHEMA = {
     "required": ["query", "decision_log"]
 }
 
+# implementing the generate sql query function
+
+def generate_sql_query(user_message:str,schemas:dict,max_attempts:int=1)->dict:
+    formatted_system_message = f"""
+    {load_system_message(schemas)}
+
+    IMPORTANT: Your response must be valid JSON matching this schema:
+    {json.dumps(DECISION_LOG_SCHEMA, indent=2)}
+
+    Ensure all responses strictly follow this format.  Include a final_summary and visualization_suggestion in the decision_log.
+    """
+    for attempt in range(max_attempts):
+        try:
+            response = get_completion_from_messages(formatted_system_message, user_message)
+            json_response = json.loads(response)    
+
+            if not validate_response_structure(json_response):
+                logger.warning(f"Invalid response structure. Attempt: {attempt + 1}")
+                continue
+
+            return {
+                "query": json_response.get('query'),
+                "error": json_response.get('error'),
+                "decision_log": json_response['decision_log'],
+                "visualization_recommendation": json_response['decision_log'].get('visualization_suggestion')
+            }
+
+        except json.JSONDecodeError as e:
+            logger.exception(f"Invalid JSON response: {response}, Error: {e}")
+            continue
+        except Exception as e:
+            logger.exception(f"Unexpected error: {e}")
+            continue
+
+    return {
+        "error": "Failed to generate a valid SQL query after multiple attempts.",
+        "decision_log": {
+            "execution_feedback": ["Failed to generate a valid response after multiple attempts."],
+            "final_summary": "Query generation failed."
+        }
+    }
+
+# implement response validation
+
+def validate_response_structure(response:dict)->bool:
+    """Validates the structure of the Gemini response against the schema."""
+    try:
+        if not all(key in response for key in ["query","decision log"]):
+            return False
+        decision_log = response["decision_log"]
+        required_sections = [
+            "query_input_details",
+            "preprocessing_steps",
+            "path_identification",
+            "ambiguity_detection",
+            "resolution_criteria",
+            "chosen_path_explanation",
+            "generated_sql_query",
+            "alternative_paths",
+            "execution_feedback",
+            "final_summary"
+        ]
+
+        if not all(key in decision_log for key in required_sections):
+            return False
+        for path in decision_log["path_identification"]:
+            if not all(key in path for key in ["description", "tables", "columns", "score"]):
+                return False
+
+        for explanation in decision_log["chosen_path_explanation"]:
+            if not all(key in explanation for key in ["table", "columns", "reason"]):
+                return False
+        
+        return True
+    except Exception as e:
+        logger.exception(f"Unexpected error: {e}")
+        return False
+
+
+
+
 
 
 
