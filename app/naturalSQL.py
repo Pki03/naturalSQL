@@ -398,7 +398,7 @@ def build_markdown_decision_log(decision_log:Dict)->str:
     # Join with proper line breaks and clean up any extra spaces
     return "\n".join(line.rstrip() for line in markdown_log)
 
-def create_chart(df:pd.DataFrame,chart_type:str,x_col:col,y_col:str)->Optional[alt.Chart]:
+def create_chart(df:pd.DataFrame,chart_type:str,x_col:str,y_col:str)->Optional[alt.Chart]:
     """Create a chart using Altair library."""
     base_chart = alt.Chart(df).configure_title(fontSize=18,fontWeight='bold',font='Roboto')
 
@@ -485,6 +485,225 @@ def display_summary_statistics(df:pd.DataFrame)->None:
                 freq_table.columns = ['Category', 'Count']
                 freq_table['Percentage'] = (freq_table['Count'] / len(df) * 100).round(2)
                 st.table(freq_table.style.format({"Percentage": "{:.2f}%"}))
+
+def handle_query_response(response:dict,db_name:str,db_type:str,host: Optional[str] = None, user: Optional[str] = None, password: Optional[str] = None)->None:
+    """handles responses from query generation , displays results and visualization"""
+    try:
+        query=response.get('query','')
+        error=response.get('error','')
+        decision_log=response.get('decision_log','')
+        visualization_recommendation = response.get('visualization_recommendation', None)
+
+        if error:
+            displayed_error=generate_detailed_error_message(error)
+            st.error(f"Error reason" ,{detailed_error})
+            return
+        if not query:
+            st.warning("no query generated refine your message")
+            return
+        
+        """on success that a correct message has been given"""
+        
+        st.success("Query generated successfully")
+        colored_header("SQL Query and Summary", color_name="blue-70", description="")
+        st.code(query, language="sql")
+
+        if decision_log:
+            with st.expander("Decision Log", expanded=False):
+                st.markdown(build_markdown_decision_log(decision_log))
+
+        sql_results=get_data(query,db_name,db_type,host,user,password)
+
+        if sql_results.empty:
+            no_result_reason = "The query executed successfully but did not match any records in the database."
+            if 'no valid SQL query generated' in decision_log.get("execution_feedback",[]):
+                no_result_reason = "The query was not generated due to insufficient or ambiguous input."
+            elif 'SQL query validation failed' in decision_log.get("execution_feedback",[]):
+                no_result_reason = "The query failed validation checks and was not executed."
+            st.warning(f"The query returned no results because: {no_result_reason}")
+            return
+
+        if sql_results.columns.duplicated().any():
+            st.error("The query returned a DataFrame with duplicate column names. Please modify your query to avoid this.")
+            return
+
+        for col in sql_results.select_dtypes(include=['object']):
+            try:
+                sql_results[col] = pd.to_datetime(sql_results[col])
+            except (ValueError, TypeError):
+                pass
+
+        colored_header("Query Results and Filter", color_name="blue-70", description="")
+        filtered_results = dataframe_explorer(sql_results, case=False)
+        st.dataframe(filtered_results, use_container_width=True, height=600)
+
+        colored_header("Summary Statistics and Export Options", color_name="blue-70", description="")
+        display_summary_statistics(filtered_results)
+
+        if len(filtered_results.columns) >= 2:
+            with st.sidebar.expander("📊 Visualization Options", expanded=True):
+                numerical_cols = filtered_results.select_dtypes(include=[np.number]).columns.tolist()
+                categorical_cols = filtered_results.select_dtypes(include=['object', 'category']).columns.tolist()
+
+                suggested_x, suggested_y = None, None
+                if numerical_cols:
+                    suggested_x = numerical_cols[0]
+                    suggested_y = numerical_cols[1] if len(numerical_cols) > 1 else (categorical_cols[0] if categorical_cols else None)
+                elif categorical_cols:
+                    suggested_x = categorical_cols[0]
+                    suggested_y = categorical_cols[1] if len(categorical_cols) > 1 else None
+
+                if not suggested_x:
+                    suggested_x = filtered_results.columns[0] if not filtered_results.columns.empty else 'Column1'
+                if not suggested_y:
+                    suggested_y = filtered_results.columns[1] if len(filtered_results.columns) > 1 else (filtered_results.columns[0] if not filtered_results.columns.empty else 'Column2')
+
+                x_options = [f"{col} ⭐" if col == suggested_x else col for col in filtered_results.columns]
+                y_options = [f"{col} ⭐" if col == suggested_y else col for col in filtered_results.columns]
+
+                x_col = st.selectbox("Select X-axis Column", options=x_options, index=x_options.index(f"{suggested_x} ⭐") if f"{suggested_x} ⭐" in x_options else 0, key="x_axis")
+                y_col = st.selectbox("Select Y-axis Column", options=y_options, index=y_options.index(f"{suggested_y} ⭐") if f"{suggested_y} ⭐" in y_options else 0, key="y_axis")
+
+                x_col_clean = x_col.replace(" ⭐", "")
+                y_col_clean = y_col.replace(" ⭐", "")
+
+                chart_type_options = ["None", "Bar Chart", "Line Chart", "Scatter Plot", "Area Chart", "Histogram"]
+                suggested_chart_type = visualization_recommendation if visualization_recommendation in chart_type_options else ("Bar Chart" if numerical_cols else "None")
+                chart_type_display = [f"{chart} ⭐" if chart == suggested_chart_type else chart for chart in chart_type_options]
+
+                try:
+                    default_chart_index = chart_type_display.index(f"{suggested_chart_type} ⭐")
+                except ValueError:
+                    default_chart_index = 0
+
+                chart_type = st.selectbox(
+                    "Select Chart Type",
+                    options=chart_type_display,
+                    index=default_chart_index,
+                    help=f"Recommended Chart Type: {suggested_chart_type}",
+                    key="chart_type"
+                )
+
+                chart_type_clean = chart_type.replace(" ⭐", "")
+
+            if chart_type_clean != "None" and x_col_clean and y_col_clean:
+                chart = create_chart(filtered_results, chart_type_clean, x_col_clean, y_col_clean)
+                if chart:
+                    with chart_container(data=filtered_results):
+                        st.altair_chart(chart, use_container_width=True)
+
+        export_format = st.selectbox("Select Export Format", options=["CSV", "Excel", "JSON"], key="export_format")
+        export_results(filtered_results, export_format)
+
+        if "query_history" not in st.session_state:
+            st.session_state.query_history = []
+            st.session_state.query_timestamps = []
+
+        st.session_state.query_history.append(query)
+        st.session_state.query_timestamps.append(pd.Timestamp.now())
+
+    except Exception as e:
+        detailed_error = generate_detailed_error_message(str(e))
+        st.error(f"An unexpected error occurred: {detailed_error}")
+        logger.exception(f"Unexpected error: {e}")
+
+"""defining functions used in handle_query_response"""
+"""only read only queries are allowed as they dont tamper with the database"""
+
+def validate_sql_query(query:str)->bool:
+    """validates the sql query if it is safe to execute"""
+    if not isinstance(query,str):
+        return False
+    disallowed_keywords = r'\b(DROP|DELETE|INSERT|UPDATE|ALTER|CREATE|EXEC)\b'
+
+    if re.search(disallowed_keywords, query, re.IGNORECASE):
+        return False
+
+    if not query.strip().lower().startswith(('select', 'with')):
+        return False
+
+    if query.count('(') != query.count(')'):
+        return False
+
+    return True
+
+def export_results(sql_results: pd.DataFrame, export_format: str) -> None:
+    """Exports the results to the selected format (CSV, Excel, or JSON)."""
+    if export_format == "CSV":
+        st.download_button(
+            label="📥 Download Results as CSV",
+            data=sql_results.to_csv(index=False),
+            file_name='query_results.csv',
+            mime='text/csv'
+        )
+    elif export_format == "Excel":
+        excel_buffer = io.BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+            sql_results.to_excel(writer, index=False, sheet_name='Sheet1')
+        excel_buffer.seek(0)    
+        st.download_button(
+            label="📥 Download Results as Excel",
+            data=excel_buffer,
+            file_name='query_results.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    elif export_format == "JSON":
+        st.download_button(
+            label="📥 Download Results as JSON",
+            data=sql_results.to_json(orient='records'),
+            file_name='query_results.json',
+            mime='application/json'
+        )
+    else:
+        st.error("⚠️ Selected export format is not supported.")
+
+def analyze_dataframe_for_visualization(df: pd.DataFrame) -> list:
+    """Analyzes the DataFrame and suggests suitable visualization types."""
+    suggestions = set()
+    numerical_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+
+    logger.debug(f"Numerical Columns: {numerical_cols}")
+    logger.debug(f"Categorical Columns: {categorical_cols}")
+
+    if len(numerical_cols) == 1:
+        suggestions.update(["Histogram", "Box Plot"])
+    if len(categorical_cols) == 1:
+        suggestions.update(["Bar Chart", "Pie Chart"])
+
+    if len(numerical_cols) >= 2:
+        suggestions.update(["Scatter Plot", "Line Chart"])
+    elif len(numerical_cols) == 1 and len(categorical_cols) == 1:
+        suggestions.update(["Bar Chart"])
+
+    if len(numerical_cols) > 2:
+        suggestions.add("Scatter Plot")
+
+    time_cols = [col for col in df.columns if 'date' in col.lower() or 'time' in col.lower()]
+    if time_cols:
+        suggestions.add("Line Chart")
+
+    ordered_suggestions = [chart for chart in SUPPORTED_CHART_TYPES.keys() if chart in suggestions]
+    logger.debug(f"Ordered Suggestions: {ordered_suggestions}")
+    return ordered_suggestions
+
+
+def generate_detailed_error_message(error_message:str)->str:
+    prompt = f"Provide a detailed and user-friendly explanation for the following error message:\n\n{error_message}"
+    detailed_error = get_completion_from_messages(SYSTEM_MESSAGE, prompt)
+    return detailed_error.strip() if detailed_error else error_message
+
+# Database setup
+
+
+
+
+
+
+
+
+        
+
 
 
 
