@@ -1,65 +1,75 @@
 {
-    "name": "Python 3 - NaturalSQL",
-    "image": "mcr.microsoft.com/devcontainers/python:1-3.11-bullseye", 
-  
-    // Optional: You can define a custom Dockerfile if you need more control
-    // "build": {
-    //   "dockerfile": "./Dockerfile"
-    // },
-  
-    "customizations": {
-      "codespaces": {
-        "openFiles": [
-          "README.md", 
-          "app/naturalSQL.py"
-        ]
+  "name": "Python 3 - naturalSQL",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.11-bullseye",
+
+  // Optional: Custom Dockerfile can be defined if additional configurations are needed.
+  // "build": {
+  //   "dockerfile": "./Dockerfile"
+  // },
+
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "README.md", 
+        "app/naturalSQL.py"
+      ]
+    },
+    "vscode": {
+      "settings": {
+        // Configure Python formatter and linter settings for VSCode
+        "python.formatting.provider": "black",
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": true
       },
-      "vscode": {
-        "settings": {
-          // Optional VSCode settings can go here, e.g., Python formatting settings
-          "python.formatting.provider": "black",
-          "python.linting.enabled": true,
-          "python.linting.pylintEnabled": true
-        },
-        "extensions": [
-          "ms-python.python", 
-          "ms-python.vscode-pylance", 
-          "njpwerner.autodocstring",  // Auto-generates docstrings in Python code
-          "esbenp.prettier-vscode"    // Code formatter for HTML, CSS, JS, etc.
-        ]
-      }
-    },
+      "extensions": [
+        // VSCode extensions for Python development
+        "ms-python.python", 
+        "ms-python.vscode-pylance", 
+        "njpwerner.autodocstring",  // Auto-generates docstrings in Python code
+        "esbenp.prettier-vscode"    // Formatter for non-Python code
+      ]
+    }
+  },
+
+  // Commands to install system dependencies and Python packages
+  "updateContentCommand": [
+    // Update system packages to ensure the environment is up to date
+    "echo '⚡ Updating system packages to ensure everything is current...' && sudo apt-get update && sudo apt-get upgrade -y",
+    // Install required libraries (e.g., for database interaction and Python)
+    "echo '🔧 Installing required system libraries and tools...' && sudo apt-get install -y build-essential libpq-dev libffi-dev",
+    // Install Python dependencies from requirements.txt (if exists)
+    "echo '📥 Installing Python dependencies from requirements.txt...' && [ -f requirements.txt ] && pip install --user -r requirements.txt",
+    // Install Streamlit and essential data science libraries
+    "echo '🚀 Setting up Streamlit and essential data science libraries (pandas, numpy, etc.)...' && pip install --user streamlit pandas numpy matplotlib seaborn scikit-learn",
+    // Indicate successful setup
+    "echo '✅ Setup complete! All dependencies are installed and ready for use.'"
+  ],
   
-    // Commands to install dependencies and setup the environment
-    "updateContentCommand": [
-      "echo '🔄 Updating system packages...' && sudo apt update && sudo apt upgrade -y",
-      "echo '📦 Installing system dependencies from packages.txt...' && [ -f packages.txt ] && sudo xargs apt install -y < packages.txt",
-      "echo '🔧 Installing Python dependencies from requirements.txt...' && [ -f requirements.txt ] && pip3 install --user -r requirements.txt",
-      "echo '🔧 Installing Streamlit...' && pip3 install --user streamlit",
-      "echo '✅ Setup Complete. All dependencies installed!'"
-    ],
+  // The command to run the application after attaching the devcontainer
+  "postAttachCommand": "streamlit run app/naturalSQL.py --server.enableCORS false --server.enableXsrfProtection false",
+
+  // Define which ports should be forwarded
+  "portsAttributes": {
+    "8501": {
+      "label": "Streamlit Application",
+      "onAutoForward": "openPreview"
+    }
+  },
   
-    "postAttachCommand": "streamlit run app/naturalSQL.py --server.enableCORS false --server.enableXsrfProtection false",
-  
-    "portsAttributes": {
-      "8501": {
-        "label": "Streamlit Application",
-        "onAutoForward": "openPreview"
-      }
-    },
-    "forwardPorts": [
-      8501
-    ],
-  
-    // Optional: Define environment variables for your container
-    "containerEnv": {
-      "PYTHONPATH": "/workspace/src",
-      "DEV_ENV": "development"
-    },
-  
-    // Optional: Set up volume mounting for persistent data
-    "mounts": [
-      "source=/path/to/local/folder,target=/workspace/data,type=bind"
-    ]
-  }
-  
+  // Forward necessary ports to ensure the app is accessible
+  "forwardPorts": [
+    8501
+  ],
+
+  // Optional: Define environment variables for your container
+  "containerEnv": {
+    "PYTHONPATH": "/workspace/src", // This helps Python locate your source code
+    "DEV_ENV": "development" // Environment variable to distinguish development environment
+  },
+
+  // Optional: Set up volume mounting for persistent data storage
+  "mounts": [
+    // Adjust the path to your actual local folder where persistent data should be stored
+    "source=/path/to/local/folder,target=/workspace/data,type=bind"
+  ]
+}

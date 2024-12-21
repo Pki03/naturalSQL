@@ -255,11 +255,12 @@ def generate_sql_query(user_message:str,schemas:dict,max_attempts:int=1)->dict:
 
 # implement response validation
 
-def validate_response_structure(response:dict)->bool:
+def validate_response_structure(response: dict) -> bool:
     """Validates the structure of the Gemini response against the schema."""
     try:
-        if not all(key in response for key in ["query","decision log"]):
+        if not all(key in response for key in ["query", "decision_log"]):
             return False
+        
         decision_log = response["decision_log"]
         required_sections = [
             "query_input_details",
@@ -273,9 +274,10 @@ def validate_response_structure(response:dict)->bool:
             "execution_feedback",
             "final_summary"
         ]
-
+        
         if not all(key in decision_log for key in required_sections):
             return False
+
         for path in decision_log["path_identification"]:
             if not all(key in path for key in ["description", "tables", "columns", "score"]):
                 return False
@@ -288,6 +290,7 @@ def validate_response_structure(response:dict)->bool:
     except Exception as e:
         logger.exception(f"Unexpected error: {e}")
         return False
+
     
 def build_markdown_decision_log(decision_log:Dict)->str:
     """
@@ -486,24 +489,31 @@ def display_summary_statistics(df:pd.DataFrame)->None:
                 freq_table['Percentage'] = (freq_table['Count'] / len(df) * 100).round(2)
                 st.table(freq_table.style.format({"Percentage": "{:.2f}%"}))
 
-def handle_query_response(response:dict,db_name:str,db_type:str,host: Optional[str] = None, user: Optional[str] = None, password: Optional[str] = None)->None:
-    """handles responses from query generation , displays results and visualization"""
+def handle_query_response(
+    response: dict,
+    db_name: str,
+    db_type: str,
+    host: Optional[str] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None
+) -> None:
+    """Handles responses from query generation, displays results, and visualizations."""
     try:
-        query=response.get('query','')
-        error=response.get('error','')
-        decision_log=response.get('decision_log','')
-        visualization_recommendation = response.get('visualization_recommendation', None)
+        query = response.get("query", "")
+        error = response.get("error", "")
+        decision_log = response.get("decision_log", "")
+        visualization_recommendation = response.get("visualization_recommendation", None)
 
         if error:
-            displayed_error=generate_detailed_error_message(error)
-            st.error(f"Error reason" ,{detailed_error})
+            displayed_error = generate_detailed_error_message(error)
+            st.error(f"Error reason: {displayed_error}")
             return
+
         if not query:
-            st.warning("no query generated refine your message")
+            st.warning("No query generated. Please refine your message.")
             return
-        
-        """on success that a correct message has been given"""
-        
+
+        # On success, display query and additional information
         st.success("Query generated successfully")
         colored_header("SQL Query and Summary", color_name="blue-70", description="")
         st.code(query, language="sql")
@@ -512,13 +522,13 @@ def handle_query_response(response:dict,db_name:str,db_type:str,host: Optional[s
             with st.expander("Decision Log", expanded=False):
                 st.markdown(build_markdown_decision_log(decision_log))
 
-        sql_results=get_data(query,db_name,db_type,host,user,password)
+        sql_results = get_data(query, db_name, db_type, host, user, password)
 
         if sql_results.empty:
             no_result_reason = "The query executed successfully but did not match any records in the database."
-            if 'no valid SQL query generated' in decision_log.get("execution_feedback",[]):
+            if "no valid SQL query generated" in decision_log.get("execution_feedback", []):
                 no_result_reason = "The query was not generated due to insufficient or ambiguous input."
-            elif 'SQL query validation failed' in decision_log.get("execution_feedback",[]):
+            elif "SQL query validation failed" in decision_log.get("execution_feedback", []):
                 no_result_reason = "The query failed validation checks and was not executed."
             st.warning(f"The query returned no results because: {no_result_reason}")
             return
@@ -527,7 +537,7 @@ def handle_query_response(response:dict,db_name:str,db_type:str,host: Optional[s
             st.error("The query returned a DataFrame with duplicate column names. Please modify your query to avoid this.")
             return
 
-        for col in sql_results.select_dtypes(include=['object']):
+        for col in sql_results.select_dtypes(include=["object"]):
             try:
                 sql_results[col] = pd.to_datetime(sql_results[col])
             except (ValueError, TypeError):
@@ -540,10 +550,11 @@ def handle_query_response(response:dict,db_name:str,db_type:str,host: Optional[s
         colored_header("Summary Statistics and Export Options", color_name="blue-70", description="")
         display_summary_statistics(filtered_results)
 
+        # Visualization and Export Options
         if len(filtered_results.columns) >= 2:
             with st.sidebar.expander("📊 Visualization Options", expanded=True):
                 numerical_cols = filtered_results.select_dtypes(include=[np.number]).columns.tolist()
-                categorical_cols = filtered_results.select_dtypes(include=['object', 'category']).columns.tolist()
+                categorical_cols = filtered_results.select_dtypes(include=["object", "category"]).columns.tolist()
 
                 suggested_x, suggested_y = None, None
                 if numerical_cols:
@@ -553,62 +564,36 @@ def handle_query_response(response:dict,db_name:str,db_type:str,host: Optional[s
                     suggested_x = categorical_cols[0]
                     suggested_y = categorical_cols[1] if len(categorical_cols) > 1 else None
 
-                if not suggested_x:
-                    suggested_x = filtered_results.columns[0] if not filtered_results.columns.empty else 'Column1'
-                if not suggested_y:
-                    suggested_y = filtered_results.columns[1] if len(filtered_results.columns) > 1 else (filtered_results.columns[0] if not filtered_results.columns.empty else 'Column2')
+                suggested_x = suggested_x or (filtered_results.columns[0] if not filtered_results.columns.empty else "Column1")
+                suggested_y = suggested_y or (filtered_results.columns[1] if len(filtered_results.columns) > 1 else "Column2")
 
                 x_options = [f"{col} ⭐" if col == suggested_x else col for col in filtered_results.columns]
                 y_options = [f"{col} ⭐" if col == suggested_y else col for col in filtered_results.columns]
 
-                x_col = st.selectbox("Select X-axis Column", options=x_options, index=x_options.index(f"{suggested_x} ⭐") if f"{suggested_x} ⭐" in x_options else 0, key="x_axis")
-                y_col = st.selectbox("Select Y-axis Column", options=y_options, index=y_options.index(f"{suggested_y} ⭐") if f"{suggested_y} ⭐" in y_options else 0, key="y_axis")
-
-                x_col_clean = x_col.replace(" ⭐", "")
-                y_col_clean = y_col.replace(" ⭐", "")
+                x_col = st.selectbox("Select X-axis Column", options=x_options, index=x_options.index(f"{suggested_x} ⭐"))
+                y_col = st.selectbox("Select Y-axis Column", options=y_options, index=y_options.index(f"{suggested_y} ⭐"))
 
                 chart_type_options = ["None", "Bar Chart", "Line Chart", "Scatter Plot", "Area Chart", "Histogram"]
-                suggested_chart_type = visualization_recommendation if visualization_recommendation in chart_type_options else ("Bar Chart" if numerical_cols else "None")
-                chart_type_display = [f"{chart} ⭐" if chart == suggested_chart_type else chart for chart in chart_type_options]
+                chart_type = st.selectbox("Select Chart Type", options=chart_type_options)
 
-                try:
-                    default_chart_index = chart_type_display.index(f"{suggested_chart_type} ⭐")
-                except ValueError:
-                    default_chart_index = 0
-
-                chart_type = st.selectbox(
-                    "Select Chart Type",
-                    options=chart_type_display,
-                    index=default_chart_index,
-                    help=f"Recommended Chart Type: {suggested_chart_type}",
-                    key="chart_type"
-                )
-
-                chart_type_clean = chart_type.replace(" ⭐", "")
-
-            if chart_type_clean != "None" and x_col_clean and y_col_clean:
-                chart = create_chart(filtered_results, chart_type_clean, x_col_clean, y_col_clean)
-                if chart:
-                    with chart_container(data=filtered_results):
+                if chart_type != "None" and x_col and y_col:
+                    chart = create_chart(filtered_results, chart_type, x_col.replace(" ⭐", ""), y_col.replace(" ⭐", ""))
+                    if chart:
                         st.altair_chart(chart, use_container_width=True)
 
-        export_format = st.selectbox("Select Export Format", options=["CSV", "Excel", "JSON"], key="export_format")
+        export_format = st.selectbox("Select Export Format", options=["CSV", "Excel", "JSON"])
         export_results(filtered_results, export_format)
 
+        # Save Query History
         if "query_history" not in st.session_state:
             st.session_state.query_history = []
-            st.session_state.query_timestamps = []
-
         st.session_state.query_history.append(query)
-        st.session_state.query_timestamps.append(pd.Timestamp.now())
 
     except Exception as e:
         detailed_error = generate_detailed_error_message(str(e))
         st.error(f"An unexpected error occurred: {detailed_error}")
         logger.exception(f"Unexpected error: {e}")
 
-"""defining functions used in handle_query_response"""
-"""only read only queries are allowed as they dont tamper with the database"""
 
 def validate_sql_query(query:str)->bool:
     """validates the sql query if it is safe to execute"""
@@ -688,10 +673,15 @@ def analyze_dataframe_for_visualization(df: pd.DataFrame) -> list:
     return ordered_suggestions
 
 
-def generate_detailed_error_message(error_message:str)->str:
-    prompt = f"Provide a detailed and user-friendly explanation for the following error message:\n\n{error_message}"
-    detailed_error = get_completion_from_messages(SYSTEM_MESSAGE, prompt)
-    return detailed_error.strip() if detailed_error else error_message
+def generate_detailed_error_message(error_message: str) -> str:
+    """Generates a detailed and user-friendly explanation for the given error message."""
+    try:
+        prompt = f"Provide a detailed and user-friendly explanation for the following error message:\n\n{error_message}"
+        detailed_error = get_completion_from_messages(SYSTEM_MESSAGE, prompt)
+        return detailed_error.strip() if detailed_error else error_message
+    except Exception as gen_err:
+        logger.exception(f"Error generating detailed error message: {gen_err}")
+        return error_message  # Fallback to the original error message
 
 # Database setup
 
