@@ -695,6 +695,85 @@ def generate_detailed_error_message(error_message:str)->str:
 
 # Database setup
 
+db_type=st.sidebar.selectbox("Select Database Type",options=["SQLite","PostgreSQL"])
+
+if db_type == "SQLite":
+    uploaded_file = st.sidebar.file_uploader("Upload SQLite Database 📂", type=["db", "sqlite", "sql"])
+
+    if uploaded_file:
+        db_file = save_temp_file(uploaded_file)
+        schemas = DB_Config.get_all_schemas(db_file, db_type='sqlite')
+        table_names = list(schemas.keys())
+
+        if not schemas:
+            st.error("could not load any schemas so please check the database file")
+        
+
+        if table_names:
+            options = ["Select All"] + table_names
+            selected_tables = st.sidebar.multiselect("Select Tables 📋", options=options, key="sqlite_tables")
+            if "Select All" in selected_tables:
+                if len(selected_tables) < len(options):
+                    selected_tables = table_names
+                else:
+                    selected_tables = options
+            selected_tables = [table for table in selected_tables if table != "Select All"]
+            colored_header(f"🔍 Selected Tables: {', '.join(selected_tables)}", color_name="blue-70", description="")
+            for table in selected_tables:
+                with st.expander(f"View Schema: {table} 📖", expanded=False):
+                    st.json(schemas[table])
+
+            user_message = st.text_input(placeholder="Type your SQL query here...", key="user_message", label="Your Query 💬", label_visibility="hidden")
+            if user_message:
+                selected_schemas = {table: schemas[table] for table in selected_tables}
+                logger.debug(f"Schemas being passed to `generate_sql_query`: {selected_schemas}")
+                with st.spinner('🧠 Generating SQL query...'):
+                    response = generate_sql_query(user_message, selected_schemas)
+                handle_query_response(response, db_file, db_type='sqlite')
+
+        else:
+            st.info("📭 No tables found in the database.")
+    else:
+        st.info("📥 Please upload a database file to start.")
+
+elif db_type == "PostgreSQL":
+    with st.sidebar.expander("🔐 PostgreSQL Connection Details", expanded=True):
+        postgres_host = st.text_input("Host 🏠", placeholder="PostgreSQL Host")
+        postgres_db = st.text_input("DB Name 🗄️", placeholder="Database Name")
+        postgres_user = st.text_input("Username 👤", placeholder="Username")
+        postgres_password = st.text_input("Password 🔑", type="password", placeholder="Password")
+
+    if all([postgres_host, postgres_db, postgres_user, postgres_password]):
+        schemas = DB_Config.get_all_schemas(postgres_db, db_type='postgresql', host=postgres_host, user=postgres_user, password=postgres_password)
+        table_names = list(schemas.keys())
+
+        if table_names:
+            options = ["Select All"] + table_names
+            selected_tables = st.sidebar.multiselect("Select Tables 📋", options=options, key="postgresql_tables")
+            if "Select All" in selected_tables:
+                if len(selected_tables) < len(options):
+                    selected_tables = table_names
+                else:
+                    selected_tables = options
+            selected_tables = [table for table in selected_tables if table != "Select All"]
+            colored_header("🔍 Selected Tables:", color_name="blue-70", description="")
+            for table in selected_tables:
+                with st.expander(f"View Schema: {table} 📖", expanded=False):
+                    st.json(schemas[table])
+
+            user_message = st.text_input(placeholder="Type your SQL query here...", key="user_message_pg", label="Your Query 💬", label_visibility="hidden")
+            if user_message:
+                with st.spinner('🧠 Generating SQL query...'):
+                    selected_schemas = {table: schemas[table] for table in selected_tables}
+                    logger.debug(f"Schemas being passed to `generate_sql_query`: {selected_schemas}")
+                    response = generate_sql_query(user_message, selected_schemas)
+                handle_query_response(response, postgres_db, db_type='postgresql', host=postgres_host, user=postgres_user, password=postgres_password)
+        else:
+            st.info("📭 No tables found in the database.")
+    else:
+        st.info("🔒 Please fill in all PostgreSQL connection details to start.")
+
+
 
 
 
