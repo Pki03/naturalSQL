@@ -7,5 +7,6 @@ openpyxl
 sqlalchemy
 python-dotenv
 google-generativeai
+psycopg2-binary
 flask
 

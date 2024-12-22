@@ -1,23 +1,52 @@
 import sqlite3
 from typing import Optional, Dict, Any, Union
+import psycopg2
+from psycopg2 import OperationalError
 import pandas as pd
 import logging
-from sqlite3 import OperationalError
 
 # Setting up logging for debugging and monitoring.
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def create_connection(db_name: str) -> Optional[sqlite3.Connection]:
+def create_connection(
+        db_name: str,
+        db_type: str,
+        host: Optional[str] = None,
+        user: Optional[str] = None,
+        password: Optional[str] = None
+) -> Optional[Union[sqlite3.Connection, psycopg2.extensions.connection]]:
+    """
+    Creates a connection to the database.
+    Supports SQLite, PostgreSQL
+    """
     try:
-        conn = sqlite3.connect(db_name)
-        logger.info("Connected to SQLite")
+        if db_type.lower() == 'postgresql':
+            # Establish a connection to PostgreSQL.
+            conn = psycopg2.connect(
+                dbname=db_name,
+                user=user,
+                password=password,
+                host=host
+            )
+            logger.info("Connected to PostgreSQL")
+        elif db_type.lower() == 'sqlite':
+            # Establish a connection to SQLite.
+            conn = sqlite3.connect(db_name)
+            logger.info("Connected to SQLite")
+        else:
+            # Handle unsupported database types.
+            logger.error(f"Unsupported database type {db_type}")
+            return None
         return conn
     except OperationalError as e:
-        logger.error(f"Operational error: {e}")
+        # Log database operational errors.
+        logger.error(f"Operational error {e}")
     except Exception as e:
-        logger.exception(f"Unexpected error: {e}")
+        # Catch and log unexpected errors.
+        logger.exception(f"Unexpected error {e}")
     return None
+
 def query_database(
         query: str,
         db_name: str,
@@ -193,62 +222,6 @@ def get_postgresql_table_info(cursor, table_name: str) -> Dict[str, Any]:
 
     return table_info
 
-def get_mysql_table_info(cursor, table_name: str) -> Dict[str, Any]:
-    """
-    Retrieves metadata for a MySQL table including columns, foreign keys, indexes, and sample data.
-    """
-    table_info = {'columns': {}, 'foreign_keys': [], 'indexes': [], 'sample_data': []}
-
-    # Retrieve column information.
-    cursor.execute(f"""
-        SHOW COLUMNS FROM `{table_name}`;
-    """)
-    columns = cursor.fetchall()
-    for col in columns:
-        table_info['columns'][col[0]] = {
-            'type': col[1],
-            'nullable': col[2] == 'YES',
-            'default': col[4],
-            'primary_key': 'PRI' in col[3]
-        }
-
-    # Retrieve foreign key information.
-    cursor.execute(f"""
-        SELECT COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
-        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-        WHERE TABLE_NAME = %s AND REFERENCED_TABLE_NAME IS NOT NULL;
-    """, [table_name])
-    fkeys = cursor.fetchall()
-    for fk in fkeys:
-        table_info['foreign_keys'].append({
-            'from_column': fk[0],
-            'to_table': fk[1],
-            'to_column': fk[2]
-        })
-
-    # Retrieve index information.
-    cursor.execute(f"""
-        SHOW INDEXES FROM `{table_name}`;
-    """)
-    indexes = cursor.fetchall()
-    for idx in indexes:
-        table_info['indexes'].append({
-            'name': idx[2],
-            'unique': idx[1] == 0,  # Non-unique indexes will have a `1` in `Non_unique`.
-            'columns': [idx[4]]
-        })
-
-    # Retrieve sample data from the table.
-    cursor.execute(f"SELECT * FROM `{table_name}` LIMIT 5;")
-    sample_data = cursor.fetchall()
-    if sample_data:
-        column_names = [description[0] for description in cursor.description]
-        table_info['sample_data'] = [
-            dict(zip(column_names, row)) for row in sample_data
-        ]
-
-    return table_info
-
 def get_all_schemas(
         db_name: str,
         db_type: str,
@@ -281,13 +254,6 @@ def get_all_schemas(
 
             for table_name in tables:
                 schemas[table_name] = get_postgresql_table_info(cursor, table_name)
-        elif db_type.lower() == 'mysql':
-            # Retrieve all tables in MySQL.
-            cursor.execute("SHOW TABLES;")
-            tables = [table[0] for table in cursor.fetchall()]
-
-            for table_name in tables:
-                schemas[table_name] = get_mysql_table_info(cursor, table_name)
         else:
             logger.error(f"Unsupported database type: {db_type}")
             return {}
