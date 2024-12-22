@@ -4,9 +4,9 @@ streamlit-extras
 pandas
 altair
 openpyxl
-psycopg2-binary
 sqlalchemy
 python-dotenv
 google-generativeai
+psycopg2-binary
 flask
 

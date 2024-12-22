@@ -18,7 +18,7 @@ def create_connection(
 ) -> Optional[Union[sqlite3.Connection, psycopg2.extensions.connection]]:
     """
     Creates a connection to the database.
-    Supports SQLite and PostgreSQL.
+    Supports SQLite, PostgreSQL
     """
     try:
         if db_type.lower() == 'postgresql':
@@ -212,8 +212,7 @@ def get_postgresql_table_info(cursor, table_name: str) -> Dict[str, Any]:
         })
 
     # Retrieve sample data from the table.
-    cursor.execute(sql.SQL("SELECT * FROM {} LIMIT 5;").format(
-        sql.Identifier(table_name)))
+    cursor.execute(f"SELECT * FROM {table_name} LIMIT 5;")
     sample_data = cursor.fetchall()
     if sample_data:
         column_names = [desc[0] for desc in cursor.description]

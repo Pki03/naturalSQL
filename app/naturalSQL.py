@@ -5,7 +5,7 @@ import io
 import json
 import re
 import logging
-from typing import Dict,List,Optional,Union,TypedDict
+from typing import Dict, List, Optional, Union, TypedDict
 import pandas as pd
 import altair as alt
 import streamlit as st
@@ -18,9 +18,10 @@ from streamlit_extras.dataframe_explorer import dataframe_explorer
 import src.database.DB_Config as DB_Config
 from src.prompts.Base_Prompt import SYSTEM_MESSAGE
 from src.api.LLM_Config import get_completion_from_messages
+from typing import Optional, List
 
 logging.basicConfig(level=logging.INFO)
-logger=logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 SUPPORTED_CHART_TYPES = {
     "Bar Chart": "A chart that presents categorical data with rectangular bars.",
@@ -30,11 +31,50 @@ SUPPORTED_CHART_TYPES = {
     "Histogram": "A graphical representation of the distribution of numerical data."
 }
 
+# some basic streamlit ui/ux improvements
+
 st.set_page_config(
-    page_icon="🗃️",
-    page_title="Transforming Questions into Queries",
-    layout="wide"
+    page_icon="🧙‍♂️",
+    page_title="NaturalSQL: Transforming Questions into Insights",
+    layout="centered",
+    initial_sidebar_state="collapsed"
 )
+st.markdown(
+    """
+    <style>
+        .header {
+            text-align: center;
+            font-size: 48px;
+            font-weight: 600;
+            color: #3498db;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin-top: 50px;  /* Margin from the top */
+            margin-bottom: 20px;  /* Margin at the bottom */
+            padding: 10px;  /* Padding inside the header */
+            text-transform: capitalize;
+            letter-spacing: 1px;
+            border-bottom: 2px solid #3498db;  /* Optional: adds a bottom border for separation */
+        }
+        .magic {
+            animation: smooth-glow 2s ease-in-out infinite;
+        }
+        @keyframes smooth-glow {
+            0% { text-shadow: 0 0 8px #3498db, 0 0 20px #3498db; }
+            50% { text-shadow: 0 0 18px #3498db, 0 0 30px #3498db; }
+            100% { text-shadow: 0 0 8px #3498db, 0 0 20px #3498db; }
+        }
+        .header:hover {
+            color: #2ecc71;  /* Soft Green on hover */
+            cursor: pointer;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+st.markdown('<div class="header magic">🧙‍♂️ NaturalSQL</div>', unsafe_allow_html=True)
+
+#loading the api key
 
 load_dotenv()
 
@@ -43,66 +83,29 @@ def load_system_message(schemas: dict) -> str:
     """Loads and formats the system message with database schemas."""
     return SYSTEM_MESSAGE.format(schemas=json.dumps(schemas, indent=2))
 
-def get_data(query:str,db_name:str,db_type:str,host:Optional[str]=None,user:Optional[str]=None,password:Optional[str]=None)->pd.DataFrame:
-    return DB_Config.query_database(query,db_name,db_type,host,user,password)
+def get_data(query: str, db_name: str, db_type: str, host: Optional[str] = None, user: Optional[str] = None, password: Optional[str] = None) -> pd.DataFrame:
+    return DB_Config.query_database(query, db_name, db_type, host, user, password)
 
-def save_temp_file(uploaded_file)->str:
+def save_temp_file(uploaded_file) -> str:
     """Saves an uploaded file to a temporary location."""
-    temp_file_path="temp_database.db"
+    temp_file_path = "temp_database.db"
     with open(temp_file_path, "wb") as f:
         f.write(uploaded_file.read())
     return temp_file_path
 
 # defining classes
 class Path(TypedDict):
-    """
-    Represents a data path in a data processing or query execution scenario.
-    A path can be a series of tables and columns used to answer a specific query or make decisions.
-
-    Attributes:
-        description (str): A brief explanation of what this path represents.
-        tables (List[str]): A list of table names involved in this path.
-        columns (List[List[str]]): A list of lists where each inner list represents columns involved in this path.
-        score (int): An integer score that indicates the suitability or preference of this path. Higher values indicate better paths.
-    """
     description: str
     tables: List[str]
     columns: List[List[str]]
     score: int
 
 class TableColumn(TypedDict):
-    """
-    Represents the relationship between a specific table and the columns used in a data processing or query scenario.
-    
-    Attributes:
-        table (str): The name of the table being used.
-        columns (List[str]): A list of column names from the table.
-        reason (str): A description explaining why these columns are being used (e.g., they are needed for a query or analysis).
-    """
     table: str
     columns: List[str]
     reason: str
 
-from typing import Optional, List
-
 class DecisionLog(TypedDict):
-    """
-    Represents a log of decisions made throughout a data processing or query generation process.
-    It includes details such as the input data, steps taken, paths considered, and the generated query.
-
-    Attributes:
-        query_input_details (List[str]): A list of details about the query input (e.g., parameters, user input).
-        preprocessing_steps (List[str]): A list of preprocessing steps that were applied before generating the SQL query.
-        path_identification (List[Path]): A list of identified paths (of type Path) that were considered during the process.
-        ambiguity_detection (List[str]): A list of identified ambiguities that might have affected the query generation.
-        resolution_criteria (List[str]): A list of criteria used to resolve ambiguities in the decision process.
-        chosen_path_explanation (List[TableColumn]): A list of explanations (of type TableColumn) detailing the chosen path's tables and columns.
-        generated_sql_query (str): The final SQL query generated after decision-making.
-        alternative_paths (List[str]): A list of alternative paths considered, but not chosen.
-        execution_feedback (List[str]): Feedback or results obtained after the SQL query was executed.
-        final_summary (str): A final summary of the entire decision-making and query generation process.
-        visualization_suggestion (Optional[str]): An optional suggestion for a type of data visualization, if relevant.
-    """
     query_input_details: List[str]
     preprocessing_steps: List[str]
     path_identification: List[Path]
@@ -115,10 +118,7 @@ class DecisionLog(TypedDict):
     final_summary: str
     visualization_suggestion: Optional[str]
 
-
-
-#defining expected structure of decision log
-    
+# defining expected structure of decision log
 DECISION_LOG_SCHEMA = {
     "type": "object",
     "properties": {
@@ -211,16 +211,16 @@ DECISION_LOG_SCHEMA = {
     "required": ["query", "decision_log"]
 }
 
-# implementing the generate sql query function
 
-def generate_sql_query(user_message:str,schemas:dict,max_attempts:int=1)->dict:
+# implementing the generate sql query function
+def generate_sql_query(user_message: str, schemas: dict, db_name: str, db_type: str, host: Optional[str] = None, user: Optional[str] = None, password: Optional[str] = None, max_attempts: int = 1) -> dict:
     formatted_system_message = f"""
     {load_system_message(schemas)}
 
     IMPORTANT: Your response must be valid JSON matching this schema:
     {json.dumps(DECISION_LOG_SCHEMA, indent=2)}
 
-    Ensure all responses strictly follow this format.  Include a final_summary and visualization_suggestion in the decision_log.
+    Ensure all responses strictly follow this format. Include a final_summary and visualization_suggestion in the decision_log.
     """
     for attempt in range(max_attempts):
         try:
@@ -253,8 +253,8 @@ def generate_sql_query(user_message:str,schemas:dict,max_attempts:int=1)->dict:
         }
     }
 
-# implement response validation
 
+# implement response validation
 def validate_response_structure(response: dict) -> bool:
     """Validates the structure of the Gemini response against the schema."""
     try:
@@ -291,26 +291,26 @@ def validate_response_structure(response: dict) -> bool:
         logger.exception(f"Unexpected error: {e}")
         return False
 
-    
-def build_markdown_decision_log(decision_log:Dict)->str:
+# making the markdown decision log using the defined parameters for decision_log
+def build_markdown_decision_log(decision_log: Dict) -> str:
     """
     Builds a markdown formatted decision log that matches the schema structure.
-    Handles all fields defined in the DECISION_LOG_SCHEMA.
+    Handles all fields defined in the DECISION_LOG_SCHEMA, and ensures compatibility with all database types.
     """
-    markdown_log=[]
+    markdown_log = []
 
     # query input details
     if query_details := decision_log.get("query_input_details"):
         markdown_log.extend([
-             "### Query Input Analysis",
+            "### 🔍 Query Input Analysis",
             "\n".join(f"- {detail}" for detail in query_details),
             ""
         ])
 
-    #preprocessing steps
+    # preprocessing steps
     if preprocessing := decision_log.get("preprocessing_steps"):
         markdown_log.extend([
-            "### Preprocessing Steps",
+            "### 🛠️ Preprocessing Steps",
             "\n".join(f"- {step}" for step in preprocessing),
             ""
         ])
@@ -318,12 +318,12 @@ def build_markdown_decision_log(decision_log:Dict)->str:
     # path identification
     if paths := decision_log.get("path_identification"):
         markdown_log.extend([
-            "### Path Identification",
+            "### 🚶‍♂️ Path Identification",
             "\n".join([
-                f"**Path {i+1}** (Score: {path['score']})\n"
-                f"- Description: {path['description']}\n"
-                f"- Tables: {', '.join(path['tables'])}\n"
-                f"- Columns: {', '.join([', '.join(cols) for cols in path['columns']])}"
+                f"**Path {i + 1}** (Score: {path['score']})\n"
+                f"- ✍️ Description: {path['description']}\n"
+                f"- 📚 Tables: {', '.join(path['tables'])}\n"
+                f"- 🔑 Columns: {', '.join([', '.join(cols) for cols in path['columns']])}"
                 for i, path in enumerate(paths)
             ]),
             ""
@@ -332,15 +332,15 @@ def build_markdown_decision_log(decision_log:Dict)->str:
     # ambiguity detection
     if ambiguities := decision_log.get("ambiguity_detection"):
         markdown_log.extend([
-            "### Ambiguity Analysis",
+            "### ⚖️ Ambiguity Analysis",
             "\n".join(f"- {ambiguity}" for ambiguity in ambiguities),
             ""
         ])
 
-     # resolution criteria
+    # resolution criteria
     if criteria := decision_log.get("resolution_criteria"):
         markdown_log.extend([
-            "### Resolution Criteria",
+            "### 📝 Resolution Criteria",
             "\n".join(f"- {criterion}" for criterion in criteria),
             ""
         ])
@@ -348,11 +348,11 @@ def build_markdown_decision_log(decision_log:Dict)->str:
     # chosen path explanation
     if chosen_path := decision_log.get("chosen_path_explanation"):
         markdown_log.extend([
-            "### Selected Tables and Columns",
+            "### ✅ Selected Tables and Columns",
             "\n".join([
                 f"**{table['table']}**\n"
-                f"- Columns: {', '.join(table['columns'])}\n"
-                f"- Reason: {table['reason']}"
+                f"- 🔑 Columns: {', '.join(table['columns'])}\n"
+                f"- 📝 Reason: {table['reason']}"
                 for table in chosen_path
             ]),
             ""
@@ -361,7 +361,7 @@ def build_markdown_decision_log(decision_log:Dict)->str:
     # generated sql query
     if sql_query := decision_log.get("generated_sql_query"):
         markdown_log.extend([
-            "### Generated SQL Query",
+            "### 🧑‍💻 Generated SQL Query",
             f"```sql\n{sql_query}\n```",
             ""
         ])
@@ -369,7 +369,7 @@ def build_markdown_decision_log(decision_log:Dict)->str:
     # alternative paths
     if alternatives := decision_log.get("alternative_paths"):
         markdown_log.extend([
-            "### Alternative Approaches",
+            "### 🌱 Alternative Approaches",
             "\n".join(f"- {alt}" for alt in alternatives),
             ""
         ])
@@ -377,29 +377,30 @@ def build_markdown_decision_log(decision_log:Dict)->str:
     # execution feedback
     if feedback := decision_log.get("execution_feedback"):
         markdown_log.extend([
-            "### Execution Feedback",
+            "### 📊 Execution Feedback",
             "\n".join(f"- {item}" for item in feedback),
             ""
         ])
     
-    # finalis summary
+    # final summary
     if summary := decision_log.get("final_summary"):
         markdown_log.extend([
-            "### Summary",
+            "### 📋 Summary",
             summary,
             ""
         ])
     
-    # visualisation suggestions
+    # visualization suggestions
     if viz_suggestion := decision_log.get("visualization_suggestion"):
         markdown_log.extend([
-            "### Visualization Recommendation",
+            "### 📊 Visualization Recommendation",
             f"Suggested visualization type: `{viz_suggestion}`",
             ""
         ])
     
     # Join with proper line breaks and clean up any extra spaces
     return "\n".join(line.rstrip() for line in markdown_log)
+
 
 def create_chart(df:pd.DataFrame,chart_type:str,x_col:str,y_col:str)->Optional[alt.Chart]:
     """Create a chart using Altair library."""
@@ -444,17 +445,17 @@ def create_chart(df:pd.DataFrame,chart_type:str,x_col:str,y_col:str)->Optional[a
         logger.error(f"Error generating chart: {e}")
         return None
     
-def display_summary_statistics(df:pd.DataFrame)->None:
+def display_summary_statistics(df: pd.DataFrame) -> None:
     """Display summary statistics for the given DataFrame."""
 
     if df.empty:
-        st.warning("dataframe is empty so not able to display results")
+        st.warning("🚨 The dataframe is empty, so we cannot display any results.")
         return
     
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     non_numeric_cols = df.select_dtypes(exclude=[np.number]).columns
 
-    tab1, tab2 = st.tabs(["Numeric Summary Statistics", "Categorical Data Insights"])
+    tab1, tab2 = st.tabs(["📊 Numeric Summary Statistics", "📋 Categorical Data Insights"])
 
     if not numeric_cols.empty:
         with tab1:
@@ -465,11 +466,11 @@ def display_summary_statistics(df:pd.DataFrame)->None:
             numeric_stats['skew'] = df[numeric_cols].skew()
             numeric_stats['kurt'] = df[numeric_cols].kurt()
 
-            st.markdown("### Numeric Summary Statistics")
+            st.markdown("### 📈 Numeric Summary Statistics")
             st.dataframe(numeric_stats.style.format("{:.2f}").highlight_max(axis=0, color="lightgreen"))
 
             for col in numeric_cols:
-                st.markdown(f"#### {col}")
+                st.markdown(f"#### 📊 {col} Distribution")
                 chart = alt.Chart(df).mark_bar().encode(
                     alt.X(col, bin=alt.Bin(maxbins=30), title=f"Distribution of {col}"),
                     y='count()'
@@ -481,9 +482,9 @@ def display_summary_statistics(df:pd.DataFrame)->None:
 
     if not non_numeric_cols.empty:
         with tab2:
-            st.markdown("### Categorical Data Insights")
+            st.markdown("### 🔍 Categorical Data Insights")
             for col in non_numeric_cols:
-                st.markdown(f"**{col} Frequency**")
+                st.markdown(f"**📅 {col} Frequency**")
                 freq_table = df[col].value_counts().reset_index()
                 freq_table.columns = ['Category', 'Count']
                 freq_table['Percentage'] = (freq_table['Count'] / len(df) * 100).round(2)
@@ -642,6 +643,7 @@ def export_results(sql_results: pd.DataFrame, export_format: str) -> None:
     else:
         st.error("⚠️ Selected export format is not supported.")
 
+
 def analyze_dataframe_for_visualization(df: pd.DataFrame) -> list:
     """Analyzes the DataFrame and suggests suitable visualization types."""
     suggestions = set()
@@ -672,7 +674,6 @@ def analyze_dataframe_for_visualization(df: pd.DataFrame) -> list:
     logger.debug(f"Ordered Suggestions: {ordered_suggestions}")
     return ordered_suggestions
 
-
 def generate_detailed_error_message(error_message: str) -> str:
     """Generates a detailed and user-friendly explanation for the given error message."""
     try:
@@ -684,11 +685,10 @@ def generate_detailed_error_message(error_message: str) -> str:
         return error_message  # Fallback to the original error message
 
 # Database setup
-
-db_type=st.sidebar.selectbox("Select Database Type",options=["SQLite","PostgreSQL"])
+db_type = st.sidebar.selectbox("Select Database Type 🔧", options=["SQLite", "PostgreSQL"])
 
 if db_type == "SQLite":
-    uploaded_file = st.sidebar.file_uploader("Upload SQLite Database 📂", type=["db", "sqlite", "sql"])
+    uploaded_file = st.sidebar.file_uploader("📂 Upload SQLite Database", type=["db", "sqlite", "sql"])
 
     if uploaded_file:
         db_file = save_temp_file(uploaded_file)
@@ -696,29 +696,27 @@ if db_type == "SQLite":
         table_names = list(schemas.keys())
 
         if not schemas:
-            st.error("could not load any schemas so please check the database file")
-        
+            st.error("🚨 Could not load any schemas, please check the database file.")
 
         if table_names:
             options = ["Select All"] + table_names
-            selected_tables = st.sidebar.multiselect("Select Tables 📋", options=options, key="sqlite_tables")
+            selected_tables = st.sidebar.multiselect("📋 Select Tables", options=options, key="sqlite_tables")
             if "Select All" in selected_tables:
-                if len(selected_tables) < len(options):
-                    selected_tables = table_names
-                else:
-                    selected_tables = options
+                selected_tables = table_names
+
             selected_tables = [table for table in selected_tables if table != "Select All"]
             colored_header(f"🔍 Selected Tables: {', '.join(selected_tables)}", color_name="blue-70", description="")
+            
             for table in selected_tables:
-                with st.expander(f"View Schema: {table} 📖", expanded=False):
+                with st.expander(f"📖 View Schema: {table}", expanded=False):
                     st.json(schemas[table])
 
-            user_message = st.text_input(placeholder="Type your SQL query here...", key="user_message", label="Your Query 💬", label_visibility="hidden")
+            user_message = st.text_input(placeholder="💬 Type your SQL query here...", key="user_message", label="Your Query", label_visibility="hidden")
             if user_message:
                 selected_schemas = {table: schemas[table] for table in selected_tables}
                 logger.debug(f"Schemas being passed to `generate_sql_query`: {selected_schemas}")
-                with st.spinner('🧠 Generating SQL query...'):
-                    response = generate_sql_query(user_message, selected_schemas)
+                with st.spinner('🏎️ Generating SQL query...'):
+                    response = generate_sql_query(user_message, selected_schemas, db_name=db_file, db_type='sqlite')
                 handle_query_response(response, db_file, db_type='sqlite')
 
         else:
@@ -728,10 +726,10 @@ if db_type == "SQLite":
 
 elif db_type == "PostgreSQL":
     with st.sidebar.expander("🔐 PostgreSQL Connection Details", expanded=True):
-        postgres_host = st.text_input("Host 🏠", placeholder="PostgreSQL Host")
-        postgres_db = st.text_input("DB Name 🗄️", placeholder="Database Name")
-        postgres_user = st.text_input("Username 👤", placeholder="Username")
-        postgres_password = st.text_input("Password 🔑", type="password", placeholder="Password")
+        postgres_host = st.text_input("🏠 Host", placeholder="PostgreSQL Host")
+        postgres_db = st.text_input("🗄️ DB Name", placeholder="Database Name")
+        postgres_user = st.text_input("👤 Username", placeholder="Username")
+        postgres_password = st.text_input("🔑 Password", type="password", placeholder="Password")
 
     if all([postgres_host, postgres_db, postgres_user, postgres_password]):
         schemas = DB_Config.get_all_schemas(postgres_db, db_type='postgresql', host=postgres_host, user=postgres_user, password=postgres_password)
@@ -739,53 +737,25 @@ elif db_type == "PostgreSQL":
 
         if table_names:
             options = ["Select All"] + table_names
-            selected_tables = st.sidebar.multiselect("Select Tables 📋", options=options, key="postgresql_tables")
+            selected_tables = st.sidebar.multiselect("📋 Select Tables", options=options, key="postgresql_tables")
             if "Select All" in selected_tables:
-                if len(selected_tables) < len(options):
-                    selected_tables = table_names
-                else:
-                    selected_tables = options
+                selected_tables = table_names
+
             selected_tables = [table for table in selected_tables if table != "Select All"]
-            colored_header("🔍 Selected Tables:", color_name="blue-70", description="")
+            colored_header(f"🔍 Selected Tables: {', '.join(selected_tables)}", color_name="blue-70", description="")
+            
             for table in selected_tables:
-                with st.expander(f"View Schema: {table} 📖", expanded=False):
+                with st.expander(f"📖 View Schema: {table}", expanded=False):
                     st.json(schemas[table])
 
-            user_message = st.text_input(placeholder="Type your SQL query here...", key="user_message_pg", label="Your Query 💬", label_visibility="hidden")
+            user_message = st.text_input(placeholder="💬 Type your SQL query here...", key="user_message_pg", label="Your Query", label_visibility="hidden")
             if user_message:
-                with st.spinner('🧠 Generating SQL query...'):
+                with st.spinner('🏎️ Generating SQL query...'):
                     selected_schemas = {table: schemas[table] for table in selected_tables}
                     logger.debug(f"Schemas being passed to `generate_sql_query`: {selected_schemas}")
-                    response = generate_sql_query(user_message, selected_schemas)
+                    response = generate_sql_query(user_message, selected_schemas, db_name=postgres_db, db_type='postgresql')
                 handle_query_response(response, postgres_db, db_type='postgresql', host=postgres_host, user=postgres_user, password=postgres_password)
         else:
             st.info("📭 No tables found in the database.")
     else:
         st.info("🔒 Please fill in all PostgreSQL connection details to start.")
-
-
-
-
-
-
-
-
-
-        
-
-
-
-
-
-        
-
-    
-    
-
-
-
-
-
-
-
-    
