@@ -79,9 +79,11 @@ st.markdown('<div class="header magic">🧙‍♂️ NaturalSQL</div>', unsafe_a
 load_dotenv()
 
 @st.cache_resource
-def load_system_message(schemas: dict) -> str:
+def load_system_message(_schemas: dict) -> str:
     """Loads and formats the system message with database schemas."""
-    return SYSTEM_MESSAGE.format(schemas=json.dumps(schemas, indent=2))
+    return SYSTEM_MESSAGE.format(schemas=json.dumps(_schemas, default=str, indent=2))
+
+
 
 def get_data(query: str, db_name: str, db_type: str, host: Optional[str] = None, user: Optional[str] = None, password: Optional[str] = None) -> pd.DataFrame:
     return DB_Config.query_database(query, db_name, db_type, host, user, password)
