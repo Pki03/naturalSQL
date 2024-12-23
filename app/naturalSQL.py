@@ -686,7 +686,40 @@ def generate_detailed_error_message(error_message: str) -> str:
         logger.exception(f"Error generating detailed error message: {gen_err}")
         return error_message  # Fallback to the original error message
 
+import speech_recognition as sr
+
+def listen_for_query():
+    """Function to listen to the user's voice and convert it to text with a 3-second timeout."""
+    recognizer = sr.Recognizer()
+    
+    with sr.Microphone() as source:
+        print("Listening for your query...")
+
+        # Reduce the ambient noise adjustment time to 0.1 seconds
+        recognizer.adjust_for_ambient_noise(source, duration=0.1)
+
+        try:
+            # Listen for a maximum of 3 seconds of speech
+            audio = recognizer.listen(source, timeout=3, phrase_time_limit=3)  # Timeout after 3 seconds of no speech
+            
+            # Convert the audio to text using Google Speech Recognition
+            query = recognizer.recognize_google(audio)
+            print(f"You said: {query}")
+            return query
+        except sr.UnknownValueError:
+            print("Sorry, I could not understand the audio.")
+            return None
+        except sr.RequestError as e:
+            print(f"Could not request results; {e}")
+            return None
+        except Exception as ex:
+            print(f"An error occurred: {ex}")
+            return None
+
+
+
 # Database setup
+    
 db_type = st.sidebar.selectbox("Select Database Type 🔧", options=["SQLite", "PostgreSQL"])
 
 if db_type == "SQLite":
@@ -714,6 +747,10 @@ if db_type == "SQLite":
                     st.json(schemas[table])
 
             user_message = st.text_input(placeholder="💬 Type your SQL query here...", key="user_message", label="Your Query", label_visibility="hidden")
+            if st.button("Speak:🎤"):
+
+                user_message = listen_for_query()
+         
             if user_message:
                 selected_schemas = {table: schemas[table] for table in selected_tables}
                 logger.debug(f"Schemas being passed to `generate_sql_query`: {selected_schemas}")
