@@ -60,6 +60,8 @@
 ```bash
 git clone https://github.com/yourusername/naturalSQL.git
 cd naturalSQL
+
+python3.9 -m streamlit run app/naturalSQL.py
 ```
 
 
