@@ -6,8 +6,9 @@ import pandas as pd
 import logging
 
 # Setting up logging for debugging and monitoring.
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)  # Configure logging to show INFO-level messages
+logger = logging.getLogger(__name__)      # Create a logger instance for this module
+
 
 def create_connection(
         db_name: str,
@@ -18,11 +19,11 @@ def create_connection(
 ) -> Optional[Union[sqlite3.Connection, psycopg2.extensions.connection]]:
     """
     Creates a connection to the database.
-    Supports SQLite, PostgreSQL
+    Supports SQLite and PostgreSQL.
     """
     try:
-        if db_type.lower() == 'postgresql':
-            # Establish a connection to PostgreSQL.
+        if db_type.lower() == 'postgresql':  # If database is PostgreSQL
+            # Establish a connection to PostgreSQL using psycopg2
             conn = psycopg2.connect(
                 dbname=db_name,
                 user=user,
@@ -30,22 +31,21 @@ def create_connection(
                 host=host
             )
             logger.info("Connected to PostgreSQL")
-        elif db_type.lower() == 'sqlite':
-            # Establish a connection to SQLite.
+        elif db_type.lower() == 'sqlite':  # If database is SQLite
+            # Establish a connection to SQLite (local file-based database)
             conn = sqlite3.connect(db_name)
             logger.info("Connected to SQLite")
         else:
-            # Handle unsupported database types.
+            # Unsupported database type
             logger.error(f"Unsupported database type {db_type}")
             return None
         return conn
-    except OperationalError as e:
-        # Log database operational errors.
+    except OperationalError as e:  # Handle known database connection errors
         logger.error(f"Operational error {e}")
-    except Exception as e:
-        # Catch and log unexpected errors.
+    except Exception as e:  # Catch any unexpected errors
         logger.exception(f"Unexpected error {e}")
-    return None
+    return None  # Return None if connection failed
+
 
 def query_database(
         query: str,
@@ -58,32 +58,34 @@ def query_database(
     """
     Executes a SQL query and returns the result as a pandas DataFrame.
     """
-    # Create a connection to the database.
+    # Create a database connection
     conn = create_connection(db_name, db_type, host, user, password)
     if conn is None:
         logger.error("Database connection failure and returning empty DataFrame")
         return pd.DataFrame()
     try:
-        # Execute the query and fetch results into a DataFrame.
+        # Use pandas to execute SQL query and return results as DataFrame
         df = pd.read_sql_query(query, conn)
         logger.info("Query executed successfully")
         return df
     except Exception as e:
-        # Log errors in query execution.
+        # Log error if query execution fails
         logger.error(f"Error executing query: {e}")
         return pd.DataFrame()
     finally:
-        # Ensure the database connection is closed.
+        # Ensure connection is always closed
         conn.close()
         logger.info("Connection closed")
+
 
 def get_sqlite_table_info(cursor, table_name: str) -> Dict[str, Any]:
     """
     Retrieves metadata for a SQLite table including columns, foreign keys, indexes, and sample data.
     """
+    # Dictionary to hold table metadata
     table_info = {'columns': {}, 'foreign_keys': [], 'indexes': [], 'sample_data': []}
 
-    # Retrieve column information.
+    # Retrieve column information from PRAGMA
     cursor.execute(f"PRAGMA table_info(\"{table_name}\");")
     columns = cursor.fetchall()
     for col in columns:
@@ -94,7 +96,7 @@ def get_sqlite_table_info(cursor, table_name: str) -> Dict[str, Any]:
             'default': col[4]
         }
 
-    # Retrieve foreign key information.
+    # Retrieve foreign key info
     cursor.execute(f"PRAGMA foreign_key_list(\"{table_name}\");")
     fkeys = cursor.fetchall()
     for fk in fkeys:
@@ -106,7 +108,7 @@ def get_sqlite_table_info(cursor, table_name: str) -> Dict[str, Any]:
             'on_delete': fk[6]
         })
 
-    # Retrieve index information.
+    # Retrieve index info
     cursor.execute(f"PRAGMA index_list(\"{table_name}\");")
     indexes = cursor.fetchall()
     for idx in indexes:
@@ -118,7 +120,7 @@ def get_sqlite_table_info(cursor, table_name: str) -> Dict[str, Any]:
             'columns': [col[2] for col in index_columns]
         })
 
-    # Retrieve sample data from the table.
+    # Retrieve sample data (first 5 rows)
     cursor.execute(f"SELECT * FROM \"{table_name}\" LIMIT 5;")
     sample_data = cursor.fetchall()
     if sample_data:
@@ -129,13 +131,14 @@ def get_sqlite_table_info(cursor, table_name: str) -> Dict[str, Any]:
 
     return table_info
 
+
 def get_postgresql_table_info(cursor, table_name: str) -> Dict[str, Any]:
     """
     Retrieves metadata for a PostgreSQL table including columns, foreign keys, indexes, and sample data.
     """
     table_info = {'columns': {}, 'foreign_keys': [], 'indexes': [], 'sample_data': []}
 
-    # Retrieve column information.
+    # Retrieve column metadata from information_schema
     cursor.execute("""
         SELECT 
             column_name, 
@@ -153,10 +156,10 @@ def get_postgresql_table_info(cursor, table_name: str) -> Dict[str, Any]:
             'nullable': col[2] == 'YES',
             'default': col[3],
             'max_length': col[4],
-            'primary_key': False  # Will be updated later if it's a primary key.
+            'primary_key': False  # Initially false, updated below
         }
 
-    # Retrieve primary key information.
+    # Identify primary key columns
     cursor.execute("""
         SELECT c.column_name
         FROM information_schema.table_constraints tc
@@ -171,7 +174,7 @@ def get_postgresql_table_info(cursor, table_name: str) -> Dict[str, Any]:
         if col in table_info['columns']:
             table_info['columns'][col]['primary_key'] = True
 
-    # Retrieve foreign key information.
+    # Retrieve foreign keys
     cursor.execute("""
         SELECT
             kcu.column_name,
@@ -192,7 +195,7 @@ def get_postgresql_table_info(cursor, table_name: str) -> Dict[str, Any]:
             'to_column': fk[2]
         })
 
-    # Retrieve index information.
+    # Retrieve index information
     cursor.execute("""
         SELECT
             indexname,
@@ -202,7 +205,7 @@ def get_postgresql_table_info(cursor, table_name: str) -> Dict[str, Any]:
     """, [table_name])
     indexes = cursor.fetchall()
     for idx_name, idx_def in indexes:
-        # Extract columns from index definition.
+        # Extract column names from index definition
         idx_columns = idx_def.split('(')[1].rstrip(')').split(', ')
         is_unique = 'UNIQUE' in idx_def.upper()
         table_info['indexes'].append({
@@ -211,7 +214,7 @@ def get_postgresql_table_info(cursor, table_name: str) -> Dict[str, Any]:
             'columns': idx_columns
         })
 
-    # Retrieve sample data from the table.
+    # Retrieve sample data (first 5 rows)
     cursor.execute(f"SELECT * FROM {table_name} LIMIT 5;")
     sample_data = cursor.fetchall()
     if sample_data:
@@ -221,6 +224,7 @@ def get_postgresql_table_info(cursor, table_name: str) -> Dict[str, Any]:
         ]
 
     return table_info
+
 
 def get_all_schemas(
         db_name: str,
@@ -232,40 +236,38 @@ def get_all_schemas(
     """
     Retrieves schema information for all tables in the database.
     """
-    # Create a connection to the database.
+    # Connect to database
     conn = create_connection(db_name, db_type, host, user, password)
     if conn is None:
         logger.error("Database connection failed and returning empty schemas")
         return {}
+    
     schemas = {}
     try:
         cursor = conn.cursor()
-        if db_type.lower() == 'sqlite':
-            # Retrieve all tables in SQLite.
+        if db_type.lower() == 'sqlite':  # For SQLite
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
             tables = [table[0] for table in cursor.fetchall()]
-
             for table_name in tables:
                 schemas[table_name] = get_sqlite_table_info(cursor, table_name)
-        elif db_type.lower() == 'postgresql':
-            # Retrieve all tables in PostgreSQL.
+        elif db_type.lower() == 'postgresql':  # For PostgreSQL
             cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
             tables = [table[0] for table in cursor.fetchall()]
-
             for table_name in tables:
                 schemas[table_name] = get_postgresql_table_info(cursor, table_name)
         else:
             logger.error(f"Unsupported database type: {db_type}")
             return {}
+        
         logger.info("Schema information retrieved successfully.")
         return schemas
 
     except Exception as e:
-        # Log errors while retrieving schema information.
+        # Log any errors during schema retrieval
         logger.exception(f"Error retrieving schema information: {e}")
         return {}
 
     finally:
-        # Ensure the database connection is closed.
+        # Always close connection
         conn.close()
         logger.info("Database connection closed.")

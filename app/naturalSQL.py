@@ -403,38 +403,44 @@ def build_markdown_decision_log(decision_log: Dict) -> str:
     # Join with proper line breaks and clean up any extra spaces
     return "\n".join(line.rstrip() for line in markdown_log)
 
-
-def create_chart(df:pd.DataFrame,chart_type:str,x_col:str,y_col:str)->Optional[alt.Chart]:
+def create_chart(df: pd.DataFrame, chart_type: str, x_col: str, y_col: str) -> Optional[alt.Chart]:
     """Create a chart using Altair library."""
-    base_chart = alt.Chart(df).configure_title(fontSize=18,fontWeight='bold',font='Roboto')
+
+    # Create base chart with custom title font style
+    base_chart = alt.Chart(df).configure_title(fontSize=18, fontWeight='bold', font='Roboto')
 
     try:
-        chart_props={
+        # Predefine available chart types mapped to Altair mark types
+        chart_props = {
             "Bar Chart": base_chart.mark_bar(),
             "Line Chart": base_chart.mark_line(),
             "Scatter Plot": base_chart.mark_circle(),
             "Area Chart": base_chart.mark_area(),
-            "Histogram": base_chart.mark_bar()
+            "Histogram": base_chart.mark_bar()   # Special handling for binning later
         }
 
+        # Histogram = special case → use binning on X-axis + count frequencies
         if chart_type == "Histogram":
             chart = chart_props[chart_type].encode(
                 alt.X(x_col, bin=alt.Bin(maxbins=30), title=x_col),
                 y=alt.Y('count()', title='Count')
-            ).properties(
-                width='container',
-                height=400
-            ).interactive()
+            ).properties(width='container', height=400).interactive()
         else:
+            # General encoding for other chart types
             encoding = {
                 "x": alt.X(x_col, title=x_col),
                 "y": alt.Y(y_col, title=y_col)
             }
+
+            # Add additional encodings based on chart type
             if chart_type in ["Bar Chart", "Line Chart"]:
+                # Coloring by Y values for distinction
                 encoding["color"] = alt.Color(y_col, legend=None)
             elif chart_type == "Scatter Plot":
+                # Add tooltips for better interactivity
                 encoding["tooltip"] = [x_col, y_col]
 
+            # Build final chart
             chart = chart_props[chart_type].encode(**encoding).properties(
                 width='container',
                 height=400
@@ -443,50 +449,57 @@ def create_chart(df:pd.DataFrame,chart_type:str,x_col:str,y_col:str)->Optional[a
         return chart
 
     except Exception as e:
+        # Error handling: show in Streamlit + log
         st.error(f"Error generating the chart: {e}")
         logger.error(f"Error generating chart: {e}")
         return None
-    
+
 def display_summary_statistics(df: pd.DataFrame) -> None:
     """Display summary statistics for the given DataFrame."""
 
     if df.empty:
+        # Prevent crashing on empty DF
         st.warning("🚨 The dataframe is empty, so we cannot display any results.")
         return
     
+    # Separate numeric and non-numeric columns for analysis
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     non_numeric_cols = df.select_dtypes(exclude=[np.number]).columns
 
+    # Use tabs to neatly separate numeric vs categorical insights
     tab1, tab2 = st.tabs(["📊 Numeric Summary Statistics", "📋 Categorical Data Insights"])
 
+    # ---- NUMERIC COLUMNS ----
     if not numeric_cols.empty:
         with tab1:
+            # Compute descriptive statistics
             numeric_stats = df[numeric_cols].describe().T
-            numeric_stats['median'] = df[numeric_cols].median()
-            numeric_stats['mode'] = df[numeric_cols].mode().fillna(0).iloc[0]
-            numeric_stats['iqr'] = numeric_stats['75%'] - numeric_stats['25%']
-            numeric_stats['skew'] = df[numeric_cols].skew()
-            numeric_stats['kurt'] = df[numeric_cols].kurt()
+            numeric_stats['median'] = df[numeric_cols].median()   # Why: median = robust measure of central tendency
+            numeric_stats['mode'] = df[numeric_cols].mode().fillna(0).iloc[0]  # Mode: most common value
+            numeric_stats['iqr'] = numeric_stats['75%'] - numeric_stats['25%']  # Why: spread measurement
+            numeric_stats['skew'] = df[numeric_cols].skew()       # Why: check symmetry of distribution
+            numeric_stats['kurt'] = df[numeric_cols].kurt()       # Why: check tail heaviness
 
             st.markdown("### 📈 Numeric Summary Statistics")
+            # Highlight max values for quick insight
             st.dataframe(numeric_stats.style.format("{:.2f}").highlight_max(axis=0, color="lightgreen"))
 
+            # Plot histogram for each numeric column
             for col in numeric_cols:
                 st.markdown(f"#### 📊 {col} Distribution")
                 chart = alt.Chart(df).mark_bar().encode(
                     alt.X(col, bin=alt.Bin(maxbins=30), title=f"Distribution of {col}"),
                     y='count()'
-                ).properties(
-                    width='container',
-                    height=200
-                ).interactive()
+                ).properties(width='container', height=200).interactive()
                 st.altair_chart(chart, use_container_width=True)
 
+    # ---- NON-NUMERIC COLUMNS ----
     if not non_numeric_cols.empty:
         with tab2:
             st.markdown("### 🔍 Categorical Data Insights")
             for col in non_numeric_cols:
                 st.markdown(f"**📅 {col} Frequency**")
+                # Frequency + percentage distribution
                 freq_table = df[col].value_counts().reset_index()
                 freq_table.columns = ['Category', 'Count']
                 freq_table['Percentage'] = (freq_table['Count'] / len(df) * 100).round(2)
@@ -501,34 +514,42 @@ def handle_query_response(
     password: Optional[str] = None
 ) -> None:
     """Handles responses from query generation, displays results, and visualizations."""
+
     try:
+        # Extract fields returned by SQL generator
         query = response.get("query", "")
         error = response.get("error", "")
         decision_log = response.get("decision_log", "")
         visualization_recommendation = response.get("visualization_recommendation", None)
 
+        # Handle errors from query generation stage
         if error:
             displayed_error = generate_detailed_error_message(error)
             st.error(f"Error reason: {displayed_error}")
             return
 
+        # If no query could be generated
         if not query:
             st.warning("No query generated. Please refine your message.")
             return
 
-        # On success, display query and additional information
+        # ✅ Show generated SQL query
         st.success("Query generated successfully")
         colored_header("SQL Query and Summary", color_name="blue-70", description="")
         st.code(query, language="sql")
 
+        # Show decision-making log if available (transparency into AI reasoning)
         if decision_log:
             with st.expander("Decision Log", expanded=False):
                 st.markdown(build_markdown_decision_log(decision_log))
 
+        # Run SQL query against DB
         sql_results = get_data(query, db_name, db_type, host, user, password)
 
+        # Handle no results case gracefully
         if sql_results.empty:
             no_result_reason = "The query executed successfully but did not match any records in the database."
+            # More refined messages based on execution feedback
             if "no valid SQL query generated" in decision_log.get("execution_feedback", []):
                 no_result_reason = "The query was not generated due to insufficient or ambiguous input."
             elif "SQL query validation failed" in decision_log.get("execution_feedback", []):
@@ -536,29 +557,35 @@ def handle_query_response(
             st.warning(f"The query returned no results because: {no_result_reason}")
             return
 
+        # Avoid confusing duplicate columns
         if sql_results.columns.duplicated().any():
             st.error("The query returned a DataFrame with duplicate column names. Please modify your query to avoid this.")
             return
 
+        # Try converting object columns to datetime if possible (why: better visualizations & stats)
         for col in sql_results.select_dtypes(include=["object"]):
             try:
                 sql_results[col] = pd.to_datetime(sql_results[col])
             except (ValueError, TypeError):
                 pass
 
+        # ✅ Show query results with filtering
         colored_header("Query Results and Filter", color_name="blue-70", description="")
         filtered_results = dataframe_explorer(sql_results, case=False)
         st.dataframe(filtered_results, use_container_width=True, height=600)
 
+        # ✅ Show summary statistics
         colored_header("Summary Statistics and Export Options", color_name="blue-70", description="")
         display_summary_statistics(filtered_results)
 
-        # Visualization and Export Options
+        # ✅ Visualization Options (sidebar)
         if len(filtered_results.columns) >= 2:
             with st.sidebar.expander("📊 Visualization Options", expanded=True):
+                # Identify numeric vs categorical columns
                 numerical_cols = filtered_results.select_dtypes(include=[np.number]).columns.tolist()
                 categorical_cols = filtered_results.select_dtypes(include=["object", "category"]).columns.tolist()
 
+                # Auto-suggest best X and Y columns
                 suggested_x, suggested_y = None, None
                 if numerical_cols:
                     suggested_x = numerical_cols[0]
@@ -567,32 +594,39 @@ def handle_query_response(
                     suggested_x = categorical_cols[0]
                     suggested_y = categorical_cols[1] if len(categorical_cols) > 1 else None
 
+                # Fallback defaults
                 suggested_x = suggested_x or (filtered_results.columns[0] if not filtered_results.columns.empty else "Column1")
                 suggested_y = suggested_y or (filtered_results.columns[1] if len(filtered_results.columns) > 1 else "Column2")
 
+                # Mark suggested columns with ⭐ for clarity
                 x_options = [f"{col} ⭐" if col == suggested_x else col for col in filtered_results.columns]
                 y_options = [f"{col} ⭐" if col == suggested_y else col for col in filtered_results.columns]
 
+                # Let user select X & Y columns for chart
                 x_col = st.selectbox("Select X-axis Column", options=x_options, index=x_options.index(f"{suggested_x} ⭐"))
                 y_col = st.selectbox("Select Y-axis Column", options=y_options, index=y_options.index(f"{suggested_y} ⭐"))
 
+                # Choose chart type
                 chart_type_options = ["None", "Bar Chart", "Line Chart", "Scatter Plot", "Area Chart", "Histogram"]
                 chart_type = st.selectbox("Select Chart Type", options=chart_type_options)
 
+                # Build chart if requested
                 if chart_type != "None" and x_col and y_col:
                     chart = create_chart(filtered_results, chart_type, x_col.replace(" ⭐", ""), y_col.replace(" ⭐", ""))
                     if chart:
                         st.altair_chart(chart, use_container_width=True)
 
+        # ✅ Export results to desired format
         export_format = st.selectbox("Select Export Format", options=["CSV", "Excel", "JSON"])
         export_results(filtered_results, export_format)
 
-        # Save Query History
+        # ✅ Save query to session history for later recall
         if "query_history" not in st.session_state:
             st.session_state.query_history = []
         st.session_state.query_history.append(query)
 
     except Exception as e:
+        # Handle any unexpected runtime errors
         detailed_error = generate_detailed_error_message(str(e))
         st.error(f"An unexpected error occurred: {detailed_error}")
         logger.exception(f"Unexpected error: {e}")
@@ -719,43 +753,61 @@ def listen_for_query():
 
 
 # Database setup
-    
 db_type = st.sidebar.selectbox("Select Database Type 🔧", options=["SQLite", "PostgreSQL"])
 
+# --- For SQLite Database ---
 if db_type == "SQLite":
+    # Upload SQLite database file (db, sqlite, sql extensions)
     uploaded_file = st.sidebar.file_uploader("📂 Upload SQLite Database", type=["db", "sqlite", "sql"])
 
     if uploaded_file:
+        # Save uploaded file temporarily for processing
         db_file = save_temp_file(uploaded_file)
+        # Extract schema info (tables + columns) from SQLite DB
         schemas = DB_Config.get_all_schemas(db_file, db_type='sqlite')
         table_names = list(schemas.keys())
 
         if not schemas:
+            # Show error if no schema was found (maybe invalid file)
             st.error("🚨 Could not load any schemas, please check the database file.")
 
         if table_names:
+            # Sidebar option to select tables (or select all)
             options = ["Select All"] + table_names
             selected_tables = st.sidebar.multiselect("📋 Select Tables", options=options, key="sqlite_tables")
+            
+            # Handle "Select All" option
             if "Select All" in selected_tables:
                 selected_tables = table_names
 
+            # Remove "Select All" placeholder from list if present
             selected_tables = [table for table in selected_tables if table != "Select All"]
+            
+            # Show selected tables in a colored header for clarity
             colored_header(f"🔍 Selected Tables: {', '.join(selected_tables)}", color_name="blue-70", description="")
             
+            # Show schema details for each selected table in collapsible expanders
             for table in selected_tables:
                 with st.expander(f"📖 View Schema: {table}", expanded=False):
                     st.json(schemas[table])
 
+            # Input box for user to type SQL query (hidden label for clean UI)
             user_message = st.text_input(placeholder="💬 Type your SQL query here...", key="user_message", label="Your Query", label_visibility="hidden")
+            
+            # If user clicks "Speak" button, capture voice query
             if st.button("Speak:🎤"):
-
                 user_message = listen_for_query()
          
             if user_message:
+                # Collect only selected tables' schema to guide query generation
                 selected_schemas = {table: schemas[table] for table in selected_tables}
                 logger.debug(f"Schemas being passed to `generate_sql_query`: {selected_schemas}")
+                
+                # Generate SQL query using AI/NLP
                 with st.spinner('🏎️ Generating SQL query...'):
                     response = generate_sql_query(user_message, selected_schemas, db_name=db_file, db_type='sqlite')
+                
+                # Execute and display results of query
                 handle_query_response(response, db_file, db_type='sqlite')
 
         else:
@@ -763,38 +815,55 @@ if db_type == "SQLite":
     else:
         st.info("📥 Please upload a database file to start.")
 
+# --- For PostgreSQL Database ---
 elif db_type == "PostgreSQL":
+    # Sidebar inputs for PostgreSQL connection details
     with st.sidebar.expander("🔐 PostgreSQL Connection Details", expanded=True):
         postgres_host = st.text_input("🏠 Host", placeholder="PostgreSQL Host")
         postgres_db = st.text_input("🗄️ DB Name", placeholder="Database Name")
         postgres_user = st.text_input("👤 Username", placeholder="Username")
         postgres_password = st.text_input("🔑 Password", type="password", placeholder="Password")
 
+    # Ensure all connection details are filled in
     if all([postgres_host, postgres_db, postgres_user, postgres_password]):
+        # Fetch schemas (tables + columns) from PostgreSQL database
         schemas = DB_Config.get_all_schemas(postgres_db, db_type='postgresql', host=postgres_host, user=postgres_user, password=postgres_password)
         table_names = list(schemas.keys())
 
         if table_names:
+            # Sidebar option to select tables (or select all)
             options = ["Select All"] + table_names
             selected_tables = st.sidebar.multiselect("📋 Select Tables", options=options, key="postgresql_tables")
+            
             if "Select All" in selected_tables:
                 selected_tables = table_names
 
             selected_tables = [table for table in selected_tables if table != "Select All"]
+            
+            # Show selected tables
             colored_header(f"🔍 Selected Tables: {', '.join(selected_tables)}", color_name="blue-70", description="")
             
+            # Show schema details for each selected table
             for table in selected_tables:
                 with st.expander(f"📖 View Schema: {table}", expanded=False):
                     st.json(schemas[table])
 
+            # Input for natural language SQL query
             user_message = st.text_input(placeholder="💬 Type your SQL query here...", key="user_message_pg", label="Your Query", label_visibility="hidden")
+            
             if user_message:
                 with st.spinner('🏎️ Generating SQL query...'):
+                    # Collect selected table schemas
                     selected_schemas = {table: schemas[table] for table in selected_tables}
                     logger.debug(f"Schemas being passed to `generate_sql_query`: {selected_schemas}")
+                    
+                    # Generate SQL for PostgreSQL
                     response = generate_sql_query(user_message, selected_schemas, db_name=postgres_db, db_type='postgresql')
+                
+                # Execute query and display results
                 handle_query_response(response, postgres_db, db_type='postgresql', host=postgres_host, user=postgres_user, password=postgres_password)
         else:
             st.info("📭 No tables found in the database.")
     else:
+        # Warn user if connection details are missing
         st.info("🔒 Please fill in all PostgreSQL connection details to start.")
