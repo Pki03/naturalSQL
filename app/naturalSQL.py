@@ -719,39 +719,6 @@ def generate_detailed_error_message(error_message: str) -> str:
     except Exception as gen_err:
         logger.exception(f"Error generating detailed error message: {gen_err}")
         return error_message  # Fallback to the original error message
-
-import speech_recognition as sr
-
-def listen_for_query():
-    """Function to listen to the user's voice and convert it to text with a 3-second timeout."""
-    recognizer = sr.Recognizer()
-    
-    with sr.Microphone() as source:
-        print("Listening for your query...")
-
-        # Reduce the ambient noise adjustment time to 0.1 seconds
-        recognizer.adjust_for_ambient_noise(source, duration=0.1)
-
-        try:
-            # Listen for a maximum of 3 seconds of speech
-            audio = recognizer.listen(source, timeout=3, phrase_time_limit=3)  # Timeout after 3 seconds of no speech
-            
-            # Convert the audio to text using Google Speech Recognition
-            query = recognizer.recognize_google(audio)
-            print(f"You said: {query}")
-            return query
-        except sr.UnknownValueError:
-            print("Sorry, I could not understand the audio.")
-            return None
-        except sr.RequestError as e:
-            print(f"Could not request results; {e}")
-            return None
-        except Exception as ex:
-            print(f"An error occurred: {ex}")
-            return None
-
-
-
 # Database setup
 db_type = st.sidebar.selectbox("Select Database Type 🔧", options=["SQLite", "PostgreSQL"])
 
@@ -768,7 +735,6 @@ if db_type == "SQLite":
         table_names = list(schemas.keys())
 
         if not schemas:
-            # Show error if no schema was found (maybe invalid file)
             st.error("🚨 Could not load any schemas, please check the database file.")
 
         if table_names:
@@ -776,38 +742,32 @@ if db_type == "SQLite":
             options = ["Select All"] + table_names
             selected_tables = st.sidebar.multiselect("📋 Select Tables", options=options, key="sqlite_tables")
             
-            # Handle "Select All" option
             if "Select All" in selected_tables:
                 selected_tables = table_names
 
-            # Remove "Select All" placeholder from list if present
             selected_tables = [table for table in selected_tables if table != "Select All"]
             
-            # Show selected tables in a colored header for clarity
+            # Show selected tables
             colored_header(f"🔍 Selected Tables: {', '.join(selected_tables)}", color_name="blue-70", description="")
             
-            # Show schema details for each selected table in collapsible expanders
+            # Show schema details
             for table in selected_tables:
                 with st.expander(f"📖 View Schema: {table}", expanded=False):
                     st.json(schemas[table])
 
-            # Input box for user to type SQL query (hidden label for clean UI)
+            # Input box for SQL query
             user_message = st.text_input(placeholder="💬 Type your SQL query here...", key="user_message", label="Your Query", label_visibility="hidden")
-            
-            # If user clicks "Speak" button, capture voice query
-            if st.button("Speak:🎤"):
-                user_message = listen_for_query()
          
             if user_message:
-                # Collect only selected tables' schema to guide query generation
+                # Collect selected table schemas
                 selected_schemas = {table: schemas[table] for table in selected_tables}
                 logger.debug(f"Schemas being passed to `generate_sql_query`: {selected_schemas}")
                 
-                # Generate SQL query using AI/NLP
+                # Generate SQL query
                 with st.spinner('🏎️ Generating SQL query...'):
                     response = generate_sql_query(user_message, selected_schemas, db_name=db_file, db_type='sqlite')
                 
-                # Execute and display results of query
+                # Execute and display results
                 handle_query_response(response, db_file, db_type='sqlite')
 
         else:
@@ -824,14 +784,13 @@ elif db_type == "PostgreSQL":
         postgres_user = st.text_input("👤 Username", placeholder="Username")
         postgres_password = st.text_input("🔑 Password", type="password", placeholder="Password")
 
-    # Ensure all connection details are filled in
     if all([postgres_host, postgres_db, postgres_user, postgres_password]):
-        # Fetch schemas (tables + columns) from PostgreSQL database
+        # Fetch schemas
         schemas = DB_Config.get_all_schemas(postgres_db, db_type='postgresql', host=postgres_host, user=postgres_user, password=postgres_password)
         table_names = list(schemas.keys())
 
         if table_names:
-            # Sidebar option to select tables (or select all)
+            # Sidebar option to select tables
             options = ["Select All"] + table_names
             selected_tables = st.sidebar.multiselect("📋 Select Tables", options=options, key="postgresql_tables")
             
@@ -843,7 +802,7 @@ elif db_type == "PostgreSQL":
             # Show selected tables
             colored_header(f"🔍 Selected Tables: {', '.join(selected_tables)}", color_name="blue-70", description="")
             
-            # Show schema details for each selected table
+            # Show schema details
             for table in selected_tables:
                 with st.expander(f"📖 View Schema: {table}", expanded=False):
                     st.json(schemas[table])
@@ -852,12 +811,11 @@ elif db_type == "PostgreSQL":
             user_message = st.text_input(placeholder="💬 Type your SQL query here...", key="user_message_pg", label="Your Query", label_visibility="hidden")
             
             if user_message:
+                # Collect selected schemas
+                selected_schemas = {table: schemas[table] for table in selected_tables}
+                logger.debug(f"Schemas being passed to `generate_sql_query`: {selected_schemas}")
+                
                 with st.spinner('🏎️ Generating SQL query...'):
-                    # Collect selected table schemas
-                    selected_schemas = {table: schemas[table] for table in selected_tables}
-                    logger.debug(f"Schemas being passed to `generate_sql_query`: {selected_schemas}")
-                    
-                    # Generate SQL for PostgreSQL
                     response = generate_sql_query(user_message, selected_schemas, db_name=postgres_db, db_type='postgresql')
                 
                 # Execute query and display results
@@ -865,5 +823,4 @@ elif db_type == "PostgreSQL":
         else:
             st.info("📭 No tables found in the database.")
     else:
-        # Warn user if connection details are missing
         st.info("🔒 Please fill in all PostgreSQL connection details to start.")

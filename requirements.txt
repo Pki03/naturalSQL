@@ -8,6 +8,4 @@ sqlalchemy
 python-dotenv
 google-generativeai
 psycopg2-binary
-streamlit-webrtc
-speechrecognition
 
