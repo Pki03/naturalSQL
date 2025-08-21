@@ -21,7 +21,7 @@
   - Process text queries with advanced AI (Google Gemini).
   - Supports SQL query generation for simple and complex tasks.
   - Provides step-by-step reasoning and decision logs for transparency.
-  - 
+    
 - **Seamless Database Integration** 🗄️
   - Supports **PostgreSQL** and **SQLite** with dynamic schema exploration.
   - Secure and efficient database connections.
@@ -82,6 +82,7 @@ Feel free to use it.
 <img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&height=100&section=footer" width="100%"/>
 
 </div>
+
 
 
 
