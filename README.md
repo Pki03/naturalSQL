@@ -63,6 +63,8 @@
 
 ![Screenshot 6](https://github.com/user-attachments/assets/b80cbcc0-abe8-4e56-b5de-66e31ecd665f)
 
+<img width="1452" height="821" alt="Image" src="https://github.com/user-attachments/assets/11b4703e-d246-4944-835a-092bb162924d" />
+
 
 ## 🚀 Getting Started
 
@@ -85,4 +87,5 @@ Feel free to use it.
 <img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&height=100&section=footer" width="100%"/>
 
 </div>
+
 
