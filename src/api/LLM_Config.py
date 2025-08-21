@@ -6,9 +6,11 @@ import re
 # Load environment variables from a .env file
 load_dotenv()
 
-# Fetch the Gemini API key and model from environment variables
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-1.5-pro')  # Default to 'gemini-1.5-pro' if not set
+import os
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
+
 
 # Raise an error if the API key is not set, as it's required for API interaction
 if not GEMINI_API_KEY:
