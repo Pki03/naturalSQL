@@ -21,12 +21,7 @@
   - Process text queries with advanced AI (Google Gemini).
   - Supports SQL query generation for simple and complex tasks.
   - Provides step-by-step reasoning and decision logs for transparency.
-
-- **Speech-to-Query Support** 🎤 → 📝
-  - Convert spoken queries into SQL commands effortlessly.
-  - Real-time transcription using state-of-the-art speech recognition.
-  - Fully integrated with the NLP-to-SQL pipeline for seamless operation.
-
+  - 
 - **Seamless Database Integration** 🗄️
   - Supports **PostgreSQL** and **SQLite** with dynamic schema exploration.
   - Secure and efficient database connections.
@@ -87,5 +82,6 @@ Feel free to use it.
 <img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&height=100&section=footer" width="100%"/>
 
 </div>
+
 
 
